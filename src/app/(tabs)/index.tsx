@@ -628,7 +628,7 @@ export default function HomeScreen() {
         <View style={styles.header}>
           <View>
             <Text style={styles.headerTitle}>
-              Inventory
+              Inventory warit
               <Text
                 style={{
                   color: '#3B82F6'
