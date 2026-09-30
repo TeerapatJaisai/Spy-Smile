@@ -80,7 +80,10 @@ export default function ClaimAdmin() {
       const id =
         window.localStorage.getItem('userId');
 
-      if (role !== 'admin' || !id) {
+      if (
+        role?.trim().toLowerCase() !== 'admin' ||
+        !id
+      ) {
         Alert.alert(
           'ไม่มีสิทธิ์',
           'หน้านี้สำหรับ Admin เท่านั้น',
@@ -204,11 +207,6 @@ export default function ClaimAdmin() {
   // =========================
 
   const openClaim = (claim: Claim) => {
-    console.log(
-      'Opening claim:',
-      claim.id
-    );
-
     setSelectedClaim(claim);
 
     setSelectedStage(
@@ -239,7 +237,6 @@ export default function ClaimAdmin() {
         'เกิดข้อผิดพลาด',
         'ไม่พบข้อมูล Claim'
       );
-
       return;
     }
 
@@ -248,7 +245,6 @@ export default function ClaimAdmin() {
         'เกิดข้อผิดพลาด',
         'กรุณาเลือกสถานะการเคลม'
       );
-
       return;
     }
 
@@ -257,7 +253,6 @@ export default function ClaimAdmin() {
         'เกิดข้อผิดพลาด',
         'ไม่พบข้อมูล Admin'
       );
-
       return;
     }
 
@@ -266,13 +261,6 @@ export default function ClaimAdmin() {
 
       const stageId = Number(
         selectedStage
-      );
-
-      console.log(
-        'Updating Claim:',
-        selectedClaim.id,
-        'stage:',
-        stageId
       );
 
       const response = await fetch(
@@ -350,18 +338,14 @@ export default function ClaimAdmin() {
         'กรุณากรอกข้อมูล',
         'กรุณาระบุชื่อขั้นตอน'
       );
-
       return;
     }
 
     const nextOrder =
       stages.length > 0
         ? Math.max(
-            ...stages.map(
-              stage =>
-                Number(
-                  stage.step_order
-                )
+            ...stages.map(stage =>
+              Number(stage.step_order)
             )
           ) + 1
         : 1;
@@ -520,7 +504,7 @@ export default function ClaimAdmin() {
       <View style={styles.center}>
         <ActivityIndicator
           size="large"
-          color="#2563EB"
+          color="#6C5CFF"
         />
 
         <Text style={styles.loadingText}>
@@ -536,6 +520,9 @@ export default function ClaimAdmin() {
 
   return (
     <View style={styles.container}>
+      <View style={styles.glowBlue} />
+      <View style={styles.glowPurple} />
+
       <ScrollView
         contentContainerStyle={
           styles.content
@@ -726,8 +713,8 @@ export default function ClaimAdmin() {
                     </Text>
                   </View>
 
-                  {/* DETAIL FOR OTHER REASON */}
-                  {claim.reason === 'อื่นๆ' && (
+                  {claim.reason ===
+                    'อื่นๆ' && (
                     <View
                       style={
                         styles.descriptionBox
@@ -777,7 +764,6 @@ export default function ClaimAdmin() {
                     </Text>
                   </View>
 
-                  {/* EDIT BUTTON */}
                   <Pressable
                     style={({ pressed }) => [
                       styles.editButton,
@@ -841,7 +827,7 @@ export default function ClaimAdmin() {
                     setNewStageName
                   }
                   placeholder="เช่น รอตรวจสอบสินค้า"
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor="#777B85"
                 />
 
                 <TouchableOpacity
@@ -1061,16 +1047,11 @@ export default function ClaimAdmin() {
                           pressed &&
                             styles.statusButtonPressed,
                         ]}
-                        onPress={() => {
-                          console.log(
-                            'Selected stage:',
-                            stageId
-                          );
-
+                        onPress={() =>
                           setSelectedStage(
                             stageId
-                          );
-                        }}
+                          )
+                        }
                         disabled={saving}
                       >
                         <View
@@ -1230,7 +1211,7 @@ export default function ClaimAdmin() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#050507',
   },
 
   content: {
@@ -1242,13 +1223,33 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#050507',
   },
 
   loadingText: {
     marginTop: 10,
-    color: '#64748B',
+    color: '#A1A1AA',
     fontSize: 14,
+  },
+
+  glowBlue: {
+    position: 'absolute',
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    backgroundColor: 'rgba(45, 55, 180, 0.13)',
+    top: 80,
+    left: -120,
+  },
+
+  glowPurple: {
+    position: 'absolute',
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    backgroundColor: 'rgba(105, 70, 220, 0.10)',
+    top: 350,
+    right: -120,
   },
 
   // HEADER
@@ -1263,30 +1264,32 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor:
+      'rgba(255,255,255,0.04)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor:
+      'rgba(255,255,255,0.08)',
   },
 
   backText: {
     fontSize: 32,
     lineHeight: 34,
-    color: '#2563EB',
+    color: '#FFFFFF',
   },
 
   title: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#FFFFFF',
   },
 
   subtitle: {
     marginTop: 3,
     fontSize: 13,
-    color: '#64748B',
+    color: '#777B85',
   },
 
   // TAB
@@ -1302,58 +1305,66 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     borderRadius: 10,
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor:
+      'rgba(255,255,255,0.03)',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor:
+      'rgba(255,255,255,0.07)',
   },
 
   tabButtonActive: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#BFDBFE',
+    backgroundColor:
+      'rgba(92,80,255,0.18)',
+    borderColor:
+      'rgba(110,100,255,0.55)',
   },
 
   tabText: {
-    color: '#64748B',
+    color: '#777B85',
     fontSize: 13,
     fontWeight: '700',
   },
 
   tabTextActive: {
-    color: '#2563EB',
+    color: '#FFFFFF',
   },
 
   // SUMMARY
 
   summaryBox: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor:
+      'rgba(82,75,220,0.12)',
     borderRadius: 16,
     padding: 18,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#DBEAFE',
+    borderColor:
+      'rgba(110,100,255,0.25)',
   },
 
   summaryTitle: {
     fontSize: 17,
     fontWeight: '800',
-    color: '#1E3A8A',
+    color: '#FFFFFF',
   },
 
   summaryText: {
     marginTop: 4,
     fontSize: 14,
-    color: '#3B82F6',
+    color: '#8D86FF',
   },
 
   // EMPTY
 
   emptyBox: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor:
+      'rgba(255,255,255,0.03)',
     borderRadius: 18,
     padding: 50,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor:
+      'rgba(255,255,255,0.07)',
   },
 
   emptyIcon: {
@@ -1363,18 +1374,20 @@ const styles = StyleSheet.create({
 
   emptyText: {
     fontSize: 16,
-    color: '#64748B',
+    color: '#777B85',
   },
 
   // CLAIM CARD
 
   claimCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor:
+      'rgba(255,255,255,0.035)',
     borderRadius: 18,
     padding: 18,
     marginBottom: 15,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor:
+      'rgba(255,255,255,0.07)',
   },
 
   claimHeader: {
@@ -1391,24 +1404,25 @@ const styles = StyleSheet.create({
   claimId: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#2563EB',
+    color: '#8D86FF',
     marginBottom: 3,
   },
 
   productName: {
     fontSize: 17,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#FFFFFF',
   },
 
   username: {
     marginTop: 4,
     fontSize: 13,
-    color: '#64748B',
+    color: '#777B85',
   },
 
   statusBadge: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor:
+      'rgba(92,80,255,0.18)',
     borderRadius: 20,
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -1416,7 +1430,7 @@ const styles = StyleSheet.create({
   },
 
   statusText: {
-    color: '#2563EB',
+    color: '#A49DFF',
     fontSize: 11,
     fontWeight: '700',
     textAlign: 'center',
@@ -1427,51 +1441,54 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 7,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor:
+      'rgba(255,255,255,0.05)',
   },
 
   infoLabel: {
     fontSize: 13,
-    color: '#64748B',
+    color: '#777B85',
   },
 
   infoValue: {
     maxWidth: '65%',
     fontSize: 13,
     fontWeight: '600',
-    color: '#0F172A',
+    color: '#E5E7EB',
     textAlign: 'right',
   },
 
   // DESCRIPTION
 
   descriptionBox: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor:
+      'rgba(255,255,255,0.025)',
     borderRadius: 12,
     padding: 14,
     marginTop: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor:
+      'rgba(255,255,255,0.06)',
   },
 
   descriptionLabel: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#64748B',
+    color: '#777B85',
     marginBottom: 6,
   },
 
   descriptionText: {
     fontSize: 13,
     lineHeight: 20,
-    color: '#334155',
+    color: '#D1D5DB',
   },
 
   editButton: {
     marginTop: 16,
     height: 46,
     borderRadius: 12,
-    backgroundColor: '#2563EB',
+    backgroundColor: '#5B50E8',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1494,18 +1511,20 @@ const styles = StyleSheet.create({
   // ADD STAGE
 
   addStageCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor:
+      'rgba(255,255,255,0.035)',
     borderRadius: 18,
     padding: 18,
     marginBottom: 15,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor:
+      'rgba(255,255,255,0.07)',
   },
 
   sectionTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#FFFFFF',
     marginBottom: 12,
   },
 
@@ -1517,17 +1536,19 @@ const styles = StyleSheet.create({
   addStageInput: {
     flex: 1,
     height: 48,
-    backgroundColor: '#FFFFFF',
+    backgroundColor:
+      'rgba(255,255,255,0.04)',
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor:
+      'rgba(255,255,255,0.10)',
     borderRadius: 12,
     paddingHorizontal: 14,
-    color: '#0F172A',
+    color: '#FFFFFF',
     fontSize: 14,
   },
 
   addStageButton: {
-    backgroundColor: '#2563EB',
+    backgroundColor: '#5B50E8',
     paddingHorizontal: 16,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1545,9 +1566,11 @@ const styles = StyleSheet.create({
   stageCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor:
+      'rgba(255,255,255,0.035)',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor:
+      'rgba(255,255,255,0.07)',
     borderRadius: 14,
     padding: 14,
     marginBottom: 10,
@@ -1557,16 +1580,18 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: '#EFF6FF',
+    backgroundColor:
+      'rgba(92,80,255,0.15)',
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor:
+      'rgba(110,100,255,0.35)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
 
   stageNumberText: {
-    color: '#2563EB',
+    color: '#A49DFF',
     fontSize: 14,
     fontWeight: '800',
   },
@@ -1578,19 +1603,21 @@ const styles = StyleSheet.create({
   stageName: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#0F172A',
+    color: '#FFFFFF',
   },
 
   stageOrder: {
     marginTop: 3,
     fontSize: 11,
-    color: '#94A3B8',
+    color: '#666A73',
   },
 
   deleteButton: {
-    backgroundColor: '#FEF2F2',
+    backgroundColor:
+      'rgba(239,68,68,0.10)',
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor:
+      'rgba(239,68,68,0.25)',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 9,
@@ -1598,12 +1625,13 @@ const styles = StyleSheet.create({
 
   deleteText: {
     fontSize: 12,
-    color: '#DC2626',
+    color: '#F87171',
     fontWeight: '700',
   },
 
   hintBox: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor:
+      'rgba(255,255,255,0.03)',
     borderRadius: 12,
     padding: 13,
     marginTop: 5,
@@ -1611,7 +1639,7 @@ const styles = StyleSheet.create({
 
   hintText: {
     fontSize: 11,
-    color: '#64748B',
+    color: '#777B85',
     lineHeight: 17,
   },
 
@@ -1624,7 +1652,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor:
-      'rgba(15, 23, 42, 0.55)',
+      'rgba(0,0,0,0.78)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
@@ -1632,16 +1660,15 @@ const styles = StyleSheet.create({
     elevation: 100,
   },
 
-  // EDIT CARD
-
   editCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#0B0B10',
     borderRadius: 20,
     width: '100%',
     maxWidth: 520,
     maxHeight: '90%',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor:
+      'rgba(255,255,255,0.10)',
     overflow: 'hidden',
   },
 
@@ -1665,36 +1692,39 @@ const styles = StyleSheet.create({
   editTitle: {
     fontSize: 21,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#FFFFFF',
   },
 
   editProduct: {
     marginTop: 4,
     fontSize: 13,
-    color: '#64748B',
+    color: '#777B85',
   },
 
   closeButton: {
     width: 38,
     height: 38,
     borderRadius: 10,
-    backgroundColor: '#F1F5F9',
+    backgroundColor:
+      'rgba(255,255,255,0.06)',
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   closeText: {
     fontSize: 18,
-    color: '#64748B',
+    color: '#A1A1AA',
     fontWeight: '700',
   },
 
   // CURRENT STATUS
 
   currentStatusBox: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor:
+      'rgba(92,80,255,0.12)',
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor:
+      'rgba(110,100,255,0.30)',
     borderRadius: 12,
     padding: 14,
     marginBottom: 5,
@@ -1702,14 +1732,14 @@ const styles = StyleSheet.create({
 
   currentStatusLabel: {
     fontSize: 11,
-    color: '#64748B',
+    color: '#777B85',
     fontWeight: '600',
   },
 
   currentStatusText: {
     marginTop: 4,
     fontSize: 15,
-    color: '#2563EB',
+    color: '#A49DFF',
     fontWeight: '800',
   },
 
@@ -1718,7 +1748,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#334155',
+    color: '#D1D5DB',
     marginTop: 15,
     marginBottom: 8,
   },
@@ -1731,15 +1761,18 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
+    borderColor:
+      'rgba(255,255,255,0.10)',
+    backgroundColor:
+      'rgba(255,255,255,0.025)',
     justifyContent: 'center',
     paddingHorizontal: 14,
   },
 
   statusButtonActive: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#2563EB',
+    backgroundColor:
+      'rgba(92,80,255,0.16)',
+    borderColor: '#6C5CFF',
     borderWidth: 2,
   },
 
@@ -1757,45 +1790,47 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: '#CBD5E1',
+    borderColor: '#555861',
     marginRight: 10,
     justifyContent: 'center',
     alignItems: 'center',
   },
 
   radioCircleActive: {
-    borderColor: '#2563EB',
+    borderColor: '#6C5CFF',
   },
 
   radioDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#2563EB',
+    backgroundColor: '#6C5CFF',
   },
 
   statusButtonText: {
     flex: 1,
-    color: '#475569',
+    color: '#A1A1AA',
     fontSize: 13,
     fontWeight: '600',
   },
 
   statusButtonTextActive: {
-    color: '#2563EB',
+    color: '#FFFFFF',
     fontWeight: '800',
   },
 
   noStageBox: {
-    backgroundColor: '#FEF2F2',
+    backgroundColor:
+      'rgba(239,68,68,0.08)',
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor:
+      'rgba(239,68,68,0.25)',
     borderRadius: 12,
     padding: 14,
   },
 
   noStageText: {
-    color: '#DC2626',
+    color: '#F87171',
     fontSize: 13,
     fontWeight: '600',
     textAlign: 'center',
@@ -1804,17 +1839,19 @@ const styles = StyleSheet.create({
   // REASON
 
   reasonBox: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor:
+      'rgba(255,255,255,0.03)',
     borderRadius: 12,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor:
+      'rgba(255,255,255,0.07)',
   },
 
   reasonText: {
     fontSize: 13,
     lineHeight: 20,
-    color: '#475569',
+    color: '#D1D5DB',
   },
 
   // BUTTON
@@ -1829,13 +1866,14 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 48,
     borderRadius: 12,
-    backgroundColor: '#F1F5F9',
+    backgroundColor:
+      'rgba(255,255,255,0.06)',
     justifyContent: 'center',
     alignItems: 'center',
   },
 
   cancelText: {
-    color: '#475569',
+    color: '#A1A1AA',
     fontSize: 14,
     fontWeight: '700',
   },
@@ -1844,7 +1882,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 48,
     borderRadius: 12,
-    backgroundColor: '#2563EB',
+    backgroundColor: '#5B50E8',
     justifyContent: 'center',
     alignItems: 'center',
   },

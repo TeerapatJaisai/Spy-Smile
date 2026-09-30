@@ -1,1380 +1,1359 @@
-import * as Notifications from 'expo-notifications';
-import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  FlatList,
-  Image,
+  Animated,
+  Dimensions,
+  Easing,
   Platform,
-  SafeAreaView,
-  StatusBar,
+  Pressable,
   StyleSheet,
   Text,
-  TextInput,
-  TouchableOpacity,
-  View
+  View,
 } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false
-  }),
-});
-
-interface Product {
-  id: string | number;
-  name: string;
-  stock: number;
-  category: string;
-  image_url: string;
-  brand: string;
-  vram: string;
-  serial_number: string;
-  cost_price: number;
-  selling_price: number;
-  ai_tier?: number;
-}
-
-const API_BASE_URL = 'http://119.59.102.161:3100/api';
+const { width, height } = Dimensions.get('window');
 
 export default function HomeScreen() {
-  const [userRole, setUserRole] = useState<string>('user');
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
-  const [currentUsername, setCurrentUsername] = useState<string>('Staff');
+  const router = useRouter();
 
-  const [avatarUrl, setAvatarUrl] = useState<string>(
-    'https://cdn-icons-png.flaticon.com/512/149/149071.png'
-  );
+  const [isAdmin, setIsAdmin] = useState(false);
 
-  const [alertInfo, setAlertInfo] = useState<{
-    visible: boolean;
-    title: string;
-    message: string;
-    onSuccess?: () => void;
-  }>({
-    visible: false,
-    title: '',
-    message: ''
-  });
+  const isSmall = width < 500;
 
-  const [confirmInfo, setConfirmInfo] = useState<{
-    visible: boolean;
-    title: string;
-    message: string;
-    onConfirm?: () => void;
-  }>({
-    visible: false,
-    title: '',
-    message: ''
-  });
+  // ============================================================
+  // ORBIT
+  // ============================================================
 
-  const showAlert = (
-    title: string,
-    message: string,
-    onSuccess?: () => void
-  ) => {
-    setAlertInfo({
-      visible: true,
-      title,
-      message,
-      onSuccess
-    });
-  };
+  const orbitSize = isSmall ? 292 : 350;
+  const radius = orbitSize / 2;
 
-  const showConfirm = (
-    title: string,
-    message: string,
-    onConfirm: () => void
-  ) => {
-    setConfirmInfo({
-      visible: true,
-      title,
-      message,
-      onConfirm
-    });
-  };
+  const centerX = width / 2;
+  const centerY = isSmall
+    ? height * 0.47
+    : height * 0.50;
+
+  const rotation = useRef(
+    new Animated.Value(0)
+  ).current;
+
+  // ============================================================
+  // CHECK ADMIN
+  // ============================================================
 
   useEffect(() => {
-    (async () => {
-      if (Platform.OS !== 'web') {
-        const { status } =
-          await Notifications.requestPermissionsAsync();
+    if (Platform.OS === 'web') {
+      const role =
+        window.localStorage.getItem('role');
 
-        if (status !== 'granted') {
-          console.log('Notification permissions denied');
-        }
-      }
-    })();
+      setIsAdmin(
+        role?.trim().toLowerCase() === 'admin'
+      );
+    }
   }, []);
 
-  const triggerNotification = async (
-    title: string,
-    body: string
-  ) => {
-    if (Platform.OS === 'web') {
-      showAlert(title, body);
-    } else {
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title,
-          body,
-          sound: true
-        },
-        trigger: null
-      });
-    }
-  };
+  // ============================================================
+  // ORBIT ROTATION
+  // ============================================================
 
-  const assignAIClusters = (data: Product[]) => {
-    if (data.length === 0) return data;
-
-    let min = Math.min(
-      ...data.map(d => Number(d.selling_price) || 0)
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(rotation, {
+        toValue: 1,
+        duration: 30000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
     );
 
-    let max = Math.max(
-      ...data.map(d => Number(d.selling_price) || 0)
-    );
+    loop.start();
 
-    let centroids = [
-      min,
-      min + (max - min) / 2,
-      max
-    ];
+    return () => {
+      loop.stop();
+    };
+  }, [rotation]);
 
-    let currentClusters: number[] =
-      new Array(data.length).fill(0);
-
-    let iterations = 0;
-    let changed = true;
-
-    while (changed && iterations < 10) {
-      changed = false;
-
-      let clusterSums = [0, 0, 0];
-      let clusterCounts = [0, 0, 0];
-
-      data.forEach((item, index) => {
-        let price =
-          Number(item.selling_price) || 0;
-
-        let minDiff = Infinity;
-        let clusterIndex = 0;
-
-        centroids.forEach((c, i) => {
-          let diff = Math.abs(price - c);
-
-          if (diff < minDiff) {
-            minDiff = diff;
-            clusterIndex = i;
-          }
-        });
-
-        if (
-          currentClusters[index] !== clusterIndex
-        ) {
-          changed = true;
-          currentClusters[index] = clusterIndex;
-        }
-
-        clusterSums[clusterIndex] += price;
-        clusterCounts[clusterIndex]++;
-      });
-
-      for (let i = 0; i < 3; i++) {
-        if (clusterCounts[i] > 0) {
-          centroids[i] =
-            clusterSums[i] / clusterCounts[i];
-        }
-      }
-
-      iterations++;
-    }
-
-    let sortedCentroids = [...centroids]
-      .map((val, idx) => ({
-        val,
-        idx
-      }))
-      .sort((a, b) => a.val - b.val);
-
-    let tierMapping: {
-      [key: number]: number
-    } = {};
-
-    sortedCentroids.forEach((c, newIdx) => {
-      tierMapping[c.idx] = newIdx;
+  const rotate =
+    rotation.interpolate({
+      inputRange: [0, 1],
+      outputRange: [
+        '0deg',
+        '360deg',
+      ],
     });
 
-    return data.map((item, index) => ({
-      ...item,
-      ai_tier:
-        tierMapping[currentClusters[index]]
-    }));
-  };
+  const counterRotate =
+    rotation.interpolate({
+      inputRange: [0, 1],
+      outputRange: [
+        '0deg',
+        '-360deg',
+      ],
+    });
 
-  const fetchProducts = async () => {
-    try {
-      setLoading(true);
+  // ============================================================
+  // MENU
+  // ============================================================
 
-      const response = await fetch(
-        `${API_BASE_URL}/products`
-      );
+  const menuItems = [
+    // ----------------------------------------------------------
+    // PRODUCTS
+    // ----------------------------------------------------------
 
-      if (response.ok) {
-        const data = await response.json();
-        setProducts(assignAIClusters(data));
-      }
-    } catch (err) {
-      showAlert(
-        'ข้อผิดพลาด',
-        'ไม่สามารถดึงข้อมูลสินค้าได้'
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+    {
+      title: 'Products',
+      icon: 'storefront-outline',
+      route: '/product',
+      show: true,
+    },
 
-  useFocusEffect(
-    useCallback(() => {
-      const loggedIn =
-        Platform.OS === 'web'
-          ? window.localStorage.getItem('isLoggedIn')
-          : null;
+    // ----------------------------------------------------------
+    // CART
+    // ----------------------------------------------------------
 
-      if (
-        Platform.OS === 'web' &&
-        !loggedIn
-      ) {
-        router.replace('/login');
-        return;
-      }
+    {
+      title: 'Cart',
+      icon: 'cart-outline',
+      route: '/cart',
+      show: true,
+    },
 
-      if (Platform.OS === 'web') {
-        const savedName =
-          window.localStorage.getItem('username');
+    // ----------------------------------------------------------
+    // ORDERS
+    // ----------------------------------------------------------
 
-        if (savedName) {
-          setCurrentUsername(savedName);
+    {
+      title: 'Orders',
+      icon: 'package-variant-closed',
+      route: '/orders',
+      show: true,
+    },
 
-          fetch(
-            `${API_BASE_URL}/users/${savedName}`
-          )
-            .then(res =>
-              res.ok ? res.json() : null
-            )
-            .then(data => {
-              if (data?.avatar_url) {
-                setAvatarUrl(data.avatar_url);
-              }
-            })
-            .catch(console.error);
-        }
+    // ----------------------------------------------------------
+    // SHIPPING
+    // ----------------------------------------------------------
 
-        const savedRole =
-          window.localStorage.getItem('role');
+    {
+      title: 'Shipping',
+      icon: 'truck-outline',
+      route: '/shipping',
+      show: true,
+    },
 
-        if (savedRole) {
-          setUserRole(savedRole);
-        }
-      }
+    // ----------------------------------------------------------
+    // PROFILE
+    // ----------------------------------------------------------
 
-      fetchProducts();
-    }, [])
-  );
+    {
+      title: 'Profile',
+      icon: 'account-outline',
+      route: '/profile',
+      show: true,
+    },
 
-  const handleLogout = () => {
-    if (Platform.OS === 'web') {
-      window.localStorage.clear();
-    }
+    // ----------------------------------------------------------
+    // CLAIM
+    // ----------------------------------------------------------
 
-    setShowProfileMenu(false);
-    router.replace('/login');
-  };
+    {
+      title: 'Claim',
+      icon: 'shield-check-outline',
+      route: '/claim',
+      show: true,
+    },
 
-  const handleDeleteProduct = (
-    product: Product
-  ) => {
-    showConfirm(
-      'ยืนยันการลบสินค้า',
-      `คุณแน่ใจหรือไม่ว่าต้องการลบ "${product.name}" ออกจากระบบ?`,
-      async () => {
-        try {
-          const response = await fetch(
-            `${API_BASE_URL}/products/${product.id}`,
-            {
-              method: 'DELETE'
-            }
-          );
+    // ----------------------------------------------------------
+    // CLAIM ADMIN
+    // Admin only
+    // ----------------------------------------------------------
 
-          if (response.ok) {
-            fetchProducts();
+    {
+      title: 'Claim Admin',
+      icon: 'crown-outline',
+      route: '/claim-admin',
+      show: isAdmin,
+    },
 
-            triggerNotification(
-              'ลบสินค้าสำเร็จ',
-              `ลบรายการ ${product.name} ออกจากคลังแล้ว`
-            );
-          } else {
-            showAlert(
-              'เกิดข้อผิดพลาด',
-              'ไม่สามารถลบสินค้าได้'
-            );
-          }
-        } catch (err) {
-          showAlert(
-            'ข้อผิดพลาด',
-            'เชื่อมต่อเซิร์ฟเวอร์ล้มเหลว'
-          );
-        }
-      }
+    // ----------------------------------------------------------
+    // DASHBOARD
+    // Admin only
+    // ----------------------------------------------------------
+
+    {
+      title: 'Dashboard',
+      icon: 'chart-box-outline',
+      route: '/dashboard',
+      show: isAdmin,
+    },
+  ];
+
+  const visibleItems =
+    menuItems.filter(
+      (item) => item.show
     );
-  };
-
-  const handleAddToCart = async (
-    product: Product
-  ) => {
-    try {
-      const userId =
-        Platform.OS === 'web'
-          ? window.localStorage.getItem('userId')
-          : null;
-
-      if (!userId) {
-        showAlert(
-          'แจ้งเตือน',
-          'กรุณาเข้าสู่ระบบก่อนทำรายการ'
-        );
-        return;
-      }
-
-      const response = await fetch(
-        `${API_BASE_URL}/cart`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            user_id: userId,
-            product_id: product.id,
-            quantity: 1
-          })
-        }
-      );
-
-      if (response.ok) {
-        triggerNotification(
-          'เพิ่มลงตะกร้า',
-          `นำ ${product.name} ใส่ตะกร้าเรียบร้อยแล้ว 🛒`
-        );
-      } else {
-        showAlert(
-          'เกิดข้อผิดพลาด',
-          'ไม่สามารถเพิ่มสินค้าลงตะกร้าได้'
-        );
-      }
-    } catch (err) {
-      showAlert(
-        'ข้อผิดพลาด',
-        'เชื่อมต่อเซิร์ฟเวอร์ล้มเหลว'
-      );
-    }
-  };
-
-  const displayedProducts = products.filter(
-    p => {
-      const query =
-        searchQuery.toLowerCase();
-
-      return (
-        (p.name &&
-          p.name
-            .toLowerCase()
-            .includes(query)) ||
-        (p.brand &&
-          p.brand
-            .toLowerCase()
-            .includes(query)) ||
-        (p.serial_number &&
-          p.serial_number
-            .toLowerCase()
-            .includes(query))
-      );
-    }
-  );
-
-  const getAITag = (tier?: number) => {
-    if (tier === 0) {
-      return {
-        title: 'Budget',
-        color: '#10B981',
-        bg: '#D1FAE5'
-      };
-    }
-
-    if (tier === 1) {
-      return {
-        title: 'Mainstream',
-        color: '#cc1313',
-        bg: '#DBEAFE'
-      };
-    }
-
-    if (tier === 2) {
-      return {
-        title: 'High-End',
-        color: '#8B5CF6',
-        bg: '#EDE9FE'
-      };
-    }
-
-    return null;
-  };
-
-  const renderItem = ({
-    item
-  }: {
-    item: Product
-  }) => {
-    const inStock = item.stock > 0;
-    const aiTag = getAITag(item.ai_tier);
-
-    return (
-      <View style={styles.productCard}>
-        <View style={styles.cardHeader}>
-          <Image
-            source={{
-              uri:
-                item.image_url ||
-                'https://placehold.co/150x150/F3F4F6/9CA3AF.png?text=No+Image'
-            }}
-            style={styles.productImage}
-            resizeMode="cover"
-          />
-
-          <View style={styles.productInfo}>
-            <Text
-              style={styles.productName}
-              numberOfLines={1}
-            >
-              {item.name}
-            </Text>
-
-            <Text style={styles.detailText}>
-              {item.brand || 'N/A'} • VRAM:{' '}
-              {item.vram || '-'}
-            </Text>
-
-            <Text style={styles.snText}>
-              S/N: {item.serial_number || '-'}
-            </Text>
-
-            {aiTag && (
-              <View
-                style={[
-                  styles.aiBadge,
-                  {
-                    backgroundColor:
-                      aiTag.bg
-                  }
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.aiBadgeText,
-                    {
-                      color:
-                        aiTag.color
-                    }
-                  ]}
-                >
-                  :D AI: {aiTag.title}
-                </Text>
-              </View>
-            )}
-          </View>
-
-          <View style={styles.priceContainer}>
-            <Text style={styles.priceText}>
-              ฿
-              {item.selling_price
-                ? Number(
-                    item.selling_price
-                  ).toLocaleString()
-                : '0'}
-            </Text>
-
-            <View
-              style={[
-                styles.stockBadge,
-                {
-                  backgroundColor:
-                    inStock
-                      ? '#E0F2FE'
-                      : '#FEE2E2'
-                }
-              ]}
-            >
-              <Text
-                style={[
-                  styles.stockBadgeText,
-                  {
-                    color:
-                      inStock
-                        ? '#0284C7'
-                        : '#EF4444'
-                  }
-                ]}
-              >
-                {inStock
-                  ? `พร้อมส่ง: ${item.stock}`
-                  : 'สินค้าหมด'}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {userRole === 'admin' ? (
-          <View style={styles.productActions}>
-            <TouchableOpacity
-              style={styles.editBtn}
-              onPress={() =>
-                router.push({
-                  pathname: '/edit',
-                  params: {
-                    ...item
-                  }
-                })
-              }
-            >
-              <Text
-                style={styles.editBtnText}
-              >
-                แก้ไขข้อมูล
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.deleteBtn}
-              onPress={() =>
-                handleDeleteProduct(item)
-              }
-            >
-              <Text
-                style={styles.deleteBtnText}
-              >
-                ลบสินค้า
-              </Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={styles.productActions}>
-            <TouchableOpacity
-              style={[
-                styles.buyBtn,
-                {
-                  backgroundColor:
-                    inStock
-                      ? '#3B82F6'
-                      : '#F3F4F6'
-                }
-              ]}
-              onPress={() =>
-                handleAddToCart(item)
-              }
-              disabled={!inStock}
-            >
-              <Text
-                style={[
-                  styles.buyBtnText,
-                  {
-                    color:
-                      inStock
-                        ? '#FFFFFF'
-                        : '#9CA3AF'
-                  }
-                ]}
-              >
-                {inStock
-                  ? 'เพิ่มลงตะกร้า'
-                  : 'สินค้าหมดชั่วคราว'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-    );
-  };
 
   return (
-    <TouchableOpacity
-      activeOpacity={1}
-      style={{ flex: 1 }}
-      onPress={() =>
-        setShowProfileMenu(false)
-      }
-    >
-      <SafeAreaView style={styles.container}>
-        <StatusBar
-          barStyle="dark-content"
-          backgroundColor="#F9FAFB"
-        />
+    <View style={styles.container}>
 
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.headerTitle}>
-              Inventory
-              <Text
-                style={{
-                  color: '#3B82F6'
-                }}
-              >
-                .app
-              </Text>
-            </Text>
+      {/* ======================================================
+          SPACE BACKGROUND
+          ====================================================== */}
 
-            <Text
-              style={styles.headerSubtitle}
-            >
-              ระบบจัดการคลังสินค้า
-            </Text>
-          </View>
+      <View
+        pointerEvents="none"
+        style={
+          StyleSheet.absoluteFill
+        }
+      >
 
-          <View style={{ zIndex: 10 }}>
-            <TouchableOpacity
-              style={styles.profileButton}
-              onPress={e => {
-                e.stopPropagation();
-
-                setShowProfileMenu(
-                  !showProfileMenu
-                );
-              }}
-            >
-              <Image
-                source={{
-                  uri: avatarUrl
-                }}
-                style={styles.headerAvatar}
-              />
-            </TouchableOpacity>
-
-            {showProfileMenu && (
-              <View
-                style={styles.profileDropdown}
-              >
-                <Image
-                  source={{
-                    uri: avatarUrl
-                  }}
-                  style={
-                    styles.dropdownAvatar
-                  }
-                />
-
-                <Text
-                  style={styles.dropdownUser}
-                >
-                  {currentUsername}
-                </Text>
-
-                <View
-                  style={
-                    styles.dropdownDivider
-                  }
-                />
-
-                <TouchableOpacity
-                  onPress={handleLogout}
-                >
-                  <Text
-                    style={styles.logoutText}
-                  >
-                    ออกจากระบบ
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        </View>
-
-        <View style={styles.searchSection}>
-          <View
-            style={
-              styles.searchContainer
-            }
-          >
-            <Text
-              style={styles.searchIcon}
-            >
-              🔍
-            </Text>
-
-            <TextInput
-              style={styles.searchInput}
-              placeholder="ค้นหาสินค้า แบรนด์ หรือ S/N..."
-              placeholderTextColor="#9CA3AF"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-          </View>
-        </View>
-
-        {/* ADD PRODUCT */}
-        {userRole === 'admin' && (
-          <View
-            style={styles.actionSection}
-          >
-            <TouchableOpacity
-              style={styles.addBtn}
-              onPress={() =>
-                router.push('/add')
-              }
-            >
-              <Text
-                style={styles.addBtnText}
-              >
-                + เพิ่มสินค้าใหม่
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        {/* ==================================================
+            BACKGROUND GLOW
+            ================================================== */}
 
         <View
-          style={styles.listContainer}
+          style={
+            styles.backgroundGlow
+          }
+        />
+
+        {/* ==================================================
+            SMALL STARS
+            ================================================== */}
+
+        <View
+          style={styles.starsLayer}
         >
-          {loading ? (
-            <View
-              style={styles.centerContainer}
-            >
-              <ActivityIndicator
-                size="large"
-                color="#3B82F6"
-              />
-            </View>
-          ) : displayedProducts.length ===
-            0 ? (
-            <View
-              style={styles.centerContainer}
-            >
-              <Text
-                style={styles.emptyText}
-              >
-                ไม่พบสินค้าในระบบ
-              </Text>
-            </View>
-          ) : (
-            <FlatList
-              data={displayedProducts}
-              keyExtractor={item =>
-                String(item.id)
-              }
-              renderItem={renderItem}
-              showsVerticalScrollIndicator={
-                false
-              }
-              contentContainerStyle={
-                styles.flatListPadding
-              }
-            />
-          )}
+
+          <View
+            style={[
+              styles.star,
+              {
+                left: '12%',
+                top: '18%',
+              },
+            ]}
+          />
+
+          <View
+            style={[
+              styles.star,
+              {
+                left: '28%',
+                top: '12%',
+              },
+            ]}
+          />
+
+          <View
+            style={[
+              styles.star,
+              {
+                left: '44%',
+                top: '22%',
+              },
+            ]}
+          />
+
+          <View
+            style={[
+              styles.star,
+              {
+                left: '63%',
+                top: '14%',
+              },
+            ]}
+          />
+
+          <View
+            style={[
+              styles.star,
+              {
+                left: '82%',
+                top: '20%',
+              },
+            ]}
+          />
+
+          <View
+            style={[
+              styles.star,
+              {
+                left: '91%',
+                top: '42%',
+              },
+            ]}
+          />
+
+          <View
+            style={[
+              styles.star,
+              {
+                left: '16%',
+                top: '48%',
+              },
+            ]}
+          />
+
+          <View
+            style={[
+              styles.star,
+              {
+                left: '35%',
+                top: '65%',
+              },
+            ]}
+          />
+
+          <View
+            style={[
+              styles.star,
+              {
+                left: '72%',
+                top: '67%',
+              },
+            ]}
+          />
+
+          <View
+            style={[
+              styles.star,
+              {
+                left: '87%',
+                top: '78%',
+              },
+            ]}
+          />
+
+          <View
+            style={[
+              styles.star,
+              {
+                left: '8%',
+                top: '82%',
+              },
+            ]}
+          />
+
+          <View
+            style={[
+              styles.star,
+              {
+                left: '53%',
+                top: '86%',
+              },
+            ]}
+          />
+
         </View>
 
-        {/* Chat Bot */}
-        <TouchableOpacity
-          style={styles.chatBotButton}
-          onPress={() => {
-            setShowProfileMenu(false);
-            router.push('/ai-chat');
-          }}
-          activeOpacity={0.85}
+        {/* ==================================================
+            THIN METEORS
+            ================================================== */}
+
+        <Meteor
+          index={0}
+          width={width}
+          height={height}
+        />
+
+        <Meteor
+          index={1}
+          width={width}
+          height={height}
+        />
+
+        <Meteor
+          index={2}
+          width={width}
+          height={height}
+        />
+
+        <Meteor
+          index={3}
+          width={width}
+          height={height}
+        />
+
+        <Meteor
+          index={4}
+          width={width}
+          height={height}
+        />
+
+      </View>
+
+      {/* ======================================================
+          TOP TITLE
+          ====================================================== */}
+
+      <View
+        style={styles.topArea}
+      >
+
+        <Text
+          style={styles.smallTitle}
         >
-          <Text style={styles.chatBotIcon}>
-            🤖
-          </Text>
+          IT STORE
+        </Text>
 
-          <Text style={styles.chatBotText}>
-            Chat Bot
-          </Text>
-        </TouchableOpacity>
+        <Text
+          style={styles.mainTitle}
+        >
+          Smart Inventory
+        </Text>
 
-        {/* Alert */}
-        {alertInfo.visible && (
-          <View
-            style={
-              styles.customModalOverlay
-            }
-          >
-            <View
-              style={
-                styles.customModalCard
-              }
-            >
-              <Text
-                style={
-                  styles.customModalTitle
-                }
-              >
-                {alertInfo.title}
-              </Text>
+        <Text
+          style={styles.subTitle}
+        >
+          Manage your IT products
+        </Text>
 
-              <Text
-                style={
-                  styles.customModalMessage
-                }
-              >
-                {alertInfo.message}
-              </Text>
+      </View>
 
-              <TouchableOpacity
-                style={
-                  styles.customModalBtn
-                }
-                onPress={() => {
-                  const cb =
-                    alertInfo.onSuccess;
+      {/* ======================================================
+          ORBIT
+          ====================================================== */}
 
-                  setAlertInfo({
-                    ...alertInfo,
-                    visible: false
-                  });
+      <View
+        style={[
+          styles.orbitContainer,
+          {
+            width: orbitSize,
+            height: orbitSize,
+            left:
+              centerX - radius,
+            top:
+              centerY - radius,
+          },
+        ]}
+      >
 
-                  if (cb) cb();
-                }}
-              >
-                <Text
-                  style={
-                    styles.customModalBtnText
-                  }
-                >
-                  ตกลง
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
+        {/* ==================================================
+            ORBIT LINE
+            ================================================== */}
 
-        {/* Confirm Delete */}
-        {confirmInfo.visible && (
-          <View
-            style={
-              styles.customModalOverlay
-            }
-          >
-            <View
-              style={
-                styles.customModalCard
-              }
-            >
-              <Text
-                style={
-                  styles.customModalTitle
-                }
-              >
-                {confirmInfo.title}
-              </Text>
+        <View
+          style={[
+            styles.orbitLine,
+            {
+              width: orbitSize,
+              height: orbitSize,
+              borderRadius: radius,
+            },
+          ]}
+        />
 
-              <Text
-                style={
-                  styles.customModalMessage
-                }
-              >
-                {confirmInfo.message}
-              </Text>
+        {/* ==================================================
+            ROTATING MENU
+            ================================================== */}
 
-              <View
-                style={{
-                  flexDirection: 'row',
-                  gap: 12,
-                  width: '100%'
-                }}
-              >
-                <TouchableOpacity
-                  style={[
-                    styles.customModalBtn,
-                    {
-                      flex: 1,
-                      backgroundColor:
-                        '#F3F4F6'
-                    }
-                  ]}
+        <Animated.View
+          style={[
+            styles.rotationLayer,
+            {
+              width: orbitSize,
+              height: orbitSize,
+
+              transform: [
+                {
+                  rotate,
+                },
+              ],
+            },
+          ]}
+        >
+
+          {visibleItems.map(
+            (item, index) => {
+
+              // ==================================================
+              // ORBIT POSITION
+              // ==================================================
+
+              const angle =
+                (index /
+                  visibleItems.length) *
+                  Math.PI *
+                  2 -
+                Math.PI / 2;
+
+              const x =
+                Math.cos(angle) *
+                radius;
+
+              const y =
+                Math.sin(angle) *
+                radius;
+
+              return (
+                <Pressable
+                  key={item.title}
                   onPress={() =>
-                    setConfirmInfo({
-                      ...confirmInfo,
-                      visible: false
-                    })
+                    router.push(
+                      item.route as any
+                    )
                   }
+                  style={[
+                    styles.node,
+                    {
+                      left:
+                        radius +
+                        x -
+                        30,
+
+                      top:
+                        radius +
+                        y -
+                        30,
+                    },
+                  ]}
                 >
-                  <Text
+
+                  {/* ==================================================
+                      COUNTER ROTATE
+                      ================================================== */}
+
+                  <Animated.View
                     style={[
-                      styles.customModalBtnText,
+                      styles.nodeContent,
                       {
-                        color: '#4B5563'
-                      }
+                        transform: [
+                          {
+                            rotate:
+                              counterRotate,
+                          },
+                        ],
+                      },
                     ]}
                   >
-                    ยกเลิก
-                  </Text>
-                </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={[
-                    styles.customModalBtn,
-                    {
-                      flex: 1,
-                      backgroundColor:
-                        '#EF4444'
-                    }
-                  ]}
-                  onPress={() => {
-                    const cb =
-                      confirmInfo.onConfirm;
+                    {/* ==================================================
+                        ICON
+                        ================================================== */}
 
-                    setConfirmInfo({
-                      ...confirmInfo,
-                      visible: false
-                    });
+                    <View
+                      style={
+                        styles.iconCircle
+                      }
+                    >
 
-                    if (cb) cb();
-                  }}
-                >
-                  <Text
-                    style={
-                      styles.customModalBtnText
-                    }
-                  >
-                    ลบสินค้า
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+                      <MaterialCommunityIcons
+                        name={
+                          item.icon as keyof typeof MaterialCommunityIcons.glyphMap
+                        }
+                        size={24}
+                        color="#FFFFFF"
+                      />
+
+                    </View>
+
+                    {/* ==================================================
+                        LABEL
+                        ================================================== */}
+
+                    <Text
+                      style={
+                        styles.nodeLabel
+                      }
+                    >
+                      {item.title}
+                    </Text>
+
+                  </Animated.View>
+
+                </Pressable>
+              );
+            }
+          )}
+
+        </Animated.View>
+
+        {/* ==================================================
+            CENTER CORE
+            ================================================== */}
+
+        <View
+          style={
+            styles.centerCore
+          }
+        >
+
+          <View
+            style={
+              styles.centerGlow
+            }
+          />
+
+          <View
+            style={
+              styles.centerInner
+            }
+          >
+
+            <MaterialCommunityIcons
+              name="cpu"
+              size={42}
+              color="#FFFFFF"
+            />
+
           </View>
-        )}
-      </SafeAreaView>
-    </TouchableOpacity>
+
+        </View>
+
+      </View>
+
+      {/* ======================================================
+          BOTTOM
+          ====================================================== */}
+
+      <View
+        style={
+          styles.bottomArea
+        }
+      >
+
+        <Text
+          style={
+            styles.bottomTitle
+          }
+        >
+          Choose a menu
+        </Text>
+
+        <Text
+          style={
+            styles.bottomText
+          }
+        >
+          Tap an icon to continue
+        </Text>
+
+      </View>
+
+    </View>
   );
 }
 
+
+// ============================================================
+// THIN METEOR
+// ============================================================
+
+function Meteor({
+  index,
+  width,
+  height,
+}: {
+  index: number;
+  width: number;
+  height: number;
+}) {
+
+  const progress = useRef(
+    new Animated.Value(0)
+  ).current;
+
+  useEffect(() => {
+
+    let timer:
+      ReturnType<typeof setTimeout>;
+
+    const run = () => {
+
+      progress.setValue(0);
+
+      Animated.timing(
+        progress,
+        {
+          toValue: 1,
+
+          duration:
+            1800 +
+            index * 250,
+
+          easing:
+            Easing.out(
+              Easing.quad
+            ),
+
+          useNativeDriver: true,
+        }
+      ).start(() => {
+
+        timer =
+          setTimeout(
+            run,
+            1800 +
+              index * 700
+          );
+
+      });
+
+    };
+
+    timer =
+      setTimeout(
+        run,
+        index * 1200
+      );
+
+    return () => {
+
+      clearTimeout(timer);
+
+      progress.stopAnimation();
+
+    };
+
+  }, [
+    index,
+    progress,
+  ]);
+
+  // ==========================================================
+  // METEOR START POSITIONS
+  // ==========================================================
+
+  const positions = [
+
+    {
+      x: width * 0.90,
+      y: height * 0.08,
+    },
+
+    {
+      x: width * 0.72,
+      y: height * 0.15,
+    },
+
+    {
+      x: width * 0.45,
+      y: height * 0.05,
+    },
+
+    {
+      x: width * 0.95,
+      y: height * 0.35,
+    },
+
+    {
+      x: width * 0.65,
+      y: height * 0.28,
+    },
+
+  ];
+
+  const start =
+    positions[
+      index %
+        positions.length
+    ];
+
+  // ==========================================================
+  // MOVEMENT
+  // ==========================================================
+
+  const translateX =
+    progress.interpolate({
+      inputRange: [0, 1],
+
+      outputRange: [
+        0,
+        -width * 0.30,
+      ],
+    });
+
+  const translateY =
+    progress.interpolate({
+      inputRange: [0, 1],
+
+      outputRange: [
+        0,
+        height * 0.30,
+      ],
+    });
+
+  // ==========================================================
+  // OPACITY
+  // ==========================================================
+
+  const opacity =
+    progress.interpolate({
+      inputRange: [
+        0,
+        0.08,
+        0.45,
+        0.75,
+        1,
+      ],
+
+      outputRange: [
+        0,
+        0.85,
+        0.7,
+        0.35,
+        0,
+      ],
+    });
+
+  // ==========================================================
+  // SCALE
+  // ==========================================================
+
+  const scale =
+    progress.interpolate({
+      inputRange: [
+        0,
+        0.5,
+        1,
+      ],
+
+      outputRange: [
+        0.7,
+        1,
+        0.5,
+      ],
+    });
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        styles.thinMeteor,
+        {
+          left: start.x,
+          top: start.y,
+
+          opacity,
+
+          transform: [
+
+            {
+              translateX,
+            },
+
+            {
+              translateY,
+            },
+
+            {
+              scale,
+            },
+
+            {
+              rotate: '-45deg',
+            },
+
+          ],
+        },
+      ]}
+    >
+
+      {/* ==================================================
+          LONG TRAIL
+          ================================================== */}
+
+      <View
+        style={
+          styles.meteorLineLong
+        }
+      />
+
+      {/* ==================================================
+          MID TRAIL
+          ================================================== */}
+
+      <View
+        style={
+          styles.meteorLineMid
+        }
+      />
+
+      {/* ==================================================
+          BRIGHT TRAIL
+          ================================================== */}
+
+      <View
+        style={
+          styles.meteorLineBright
+        }
+      />
+
+      {/* ==================================================
+          LIGHT POINT
+          ================================================== */}
+
+      <View
+        style={
+          styles.meteorPoint
+        }
+      />
+
+    </Animated.View>
+  );
+}
+
+
+// ============================================================
+// STYLES
+// ============================================================
+
 const styles = StyleSheet.create({
+
+  // ==========================================================
+  // MAIN
+  // ==========================================================
+
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB'
+
+    backgroundColor:
+      '#050507',
+
+    overflow: 'hidden',
+
+    position: 'relative',
   },
 
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    paddingTop:
-      Platform.OS === 'web'
-        ? 30
-        : 20,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6'
-  },
+  // ==========================================================
+  // BACKGROUND
+  // ==========================================================
 
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#111827'
-  },
-
-  headerSubtitle: {
-    fontSize: 12,
-    color: '#6B7280',
-    fontWeight: '500',
-    marginTop: 2
-  },
-
-  profileButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#F3F4F6',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 4
-  },
-
-  headerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20
-  },
-
-  profileDropdown: {
+  backgroundGlow: {
     position: 'absolute',
-    top: 55,
-    right: 0,
-    backgroundColor: '#FFFFFF',
-    padding: 20,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 10
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 5,
-    minWidth: 180,
-    borderWidth: 1,
-    borderColor: '#F3F4F6'
+
+    width: 600,
+    height: 600,
+
+    borderRadius: 300,
+
+    left: '50%',
+    top: '50%',
+
+    marginLeft: -300,
+    marginTop: -300,
+
+    backgroundColor:
+      'rgba(80,60,170,0.045)',
+
+    shadowColor:
+      '#675BFF',
+
+    shadowOpacity: 0.15,
+
+    shadowRadius: 100,
   },
 
-  dropdownAvatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    alignSelf: 'center',
-    marginBottom: 12
+  starsLayer: {
+    ...StyleSheet.absoluteFillObject,
   },
 
-  dropdownUser: {
-    color: '#111827',
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 15,
-    textAlign: 'center'
+  star: {
+    position: 'absolute',
+
+    width: 2,
+    height: 2,
+
+    borderRadius: 2,
+
+    backgroundColor:
+      '#FFFFFF',
+
+    shadowColor:
+      '#FFD66B',
+
+    shadowOpacity: 0.9,
+
+    shadowRadius: 5,
+
+    elevation: 3,
   },
 
-  dropdownDivider: {
+  // ==========================================================
+  // THIN METEOR
+  // ==========================================================
+
+  thinMeteor: {
+    position: 'absolute',
+
+    width: 4,
+    height: 4,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+    zIndex: 1,
+  },
+
+  meteorLineLong: {
+    position: 'absolute',
+
+    right: 1,
+    top: 2,
+
+    width: 120,
     height: 1,
-    backgroundColor: '#F3F4F6',
-    marginBottom: 15
+
+    borderRadius: 10,
+
+    backgroundColor:
+      'rgba(255,215,130,0.18)',
+
+    shadowColor:
+      '#FFD98A',
+
+    shadowOpacity: 0.35,
+
+    shadowRadius: 5,
   },
 
-  logoutText: {
-    color: '#EF4444',
-    fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center'
-  },
-
-  searchSection: {
-    padding: 20,
-    paddingBottom: 10,
-    backgroundColor: '#FFFFFF'
-  },
-
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F3F4F6',
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    height: 50
-  },
-
-  searchIcon: {
-    fontSize: 16,
-    marginRight: 10,
-    color: '#9CA3AF'
-  },
-
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: '#111827',
-    outlineStyle: 'none'
-  },
-
-  actionSection: {
-    paddingHorizontal: 20,
-    paddingBottom: 15,
-    backgroundColor: '#FFFFFF',
-    gap: 10
-  },
-
-  addBtn: {
-    backgroundColor: '#3B82F6',
-    height: 48,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 12,
-    shadowColor: '#3B82F6',
-    shadowOffset: {
-      width: 0,
-      height: 4
-    },
-    shadowOpacity: 0.2,
-    shadowRadius: 8
-  },
-
-  addBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700'
-  },
-
-  listContainer: {
-    flex: 1
-  },
-
-  flatListPadding: {
-    padding: 20,
-    paddingBottom: 100,
-    gap: 16
-  },
-
-  productCard: {
-    backgroundColor: '#FFFFFF',
-    padding: 16,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: '#F3F4F6'
-  },
-
-  cardHeader: {
-    flexDirection: 'row'
-  },
-
-  productImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 12,
-    backgroundColor: '#F9FAFB'
-  },
-
-  productInfo: {
-    flex: 1,
-    marginLeft: 16,
-    justifyContent: 'center'
-  },
-
-  productName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 4
-  },
-
-  detailText: {
-    fontSize: 13,
-    color: '#6B7280',
-    marginBottom: 4
-  },
-
-  snText: {
-    fontSize: 11,
-    color: '#9CA3AF',
-    fontFamily:
-      Platform.OS === 'ios'
-        ? 'Courier'
-        : 'monospace',
-    marginBottom: 8
-  },
-
-  aiBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6
-  },
-
-  aiBadgeText: {
-    fontSize: 11,
-    fontWeight: '700'
-  },
-
-  priceContainer: {
-    alignItems: 'flex-end',
-    justifyContent: 'center'
-  },
-
-  priceText: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#111827',
-    marginBottom: 8
-  },
-
-  stockBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6
-  },
-
-  stockBadgeText: {
-    fontSize: 11,
-    fontWeight: '700'
-  },
-
-  productActions: {
-    flexDirection: 'row',
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-    gap: 12
-  },
-
-  editBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    borderRadius: 10
-  },
-
-  editBtnText: {
-    fontSize: 13,
-    color: '#4B5563',
-    fontWeight: '700'
-  },
-
-  deleteBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    backgroundColor: '#FEF2F2',
-    alignItems: 'center',
-    borderRadius: 10
-  },
-
-  deleteBtnText: {
-    fontSize: 13,
-    color: '#EF4444',
-    fontWeight: '700'
-  },
-
-  buyBtn: {
-    flex: 1,
-    paddingVertical: 14,
-    alignItems: 'center',
-    borderRadius: 10
-  },
-
-  buyBtnText: {
-    fontSize: 14,
-    fontWeight: '700'
-  },
-
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 40
-  },
-
-  emptyText: {
-    color: '#9CA3AF',
-    fontSize: 15,
-    fontWeight: '600'
-  },
-
-  /* 🤖 Chat Bot */
-  chatBotButton: {
+  meteorLineMid: {
     position: 'absolute',
-    right: 20,
-    bottom: 20,
-    height: 58,
-    paddingHorizontal: 18,
-    borderRadius: 29,
-    backgroundColor: '#2563EB',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4
-    },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    zIndex: 100
+
+    right: 1,
+    top: 2,
+
+    width: 75,
+    height: 1,
+
+    borderRadius: 10,
+
+    backgroundColor:
+      'rgba(255,230,175,0.45)',
+
+    shadowColor:
+      '#FFE6B0',
+
+    shadowOpacity: 0.55,
+
+    shadowRadius: 5,
   },
 
-  chatBotIcon: {
-    fontSize: 23
-  },
-
-  chatBotText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '800'
-  },
-
-  customModalOverlay: {
+  meteorLineBright: {
     position: 'absolute',
-    top: 0,
+
+    right: 1,
+    top: 2,
+
+    width: 32,
+    height: 1,
+
+    borderRadius: 10,
+
+    backgroundColor:
+      '#FFF8E8',
+
+    shadowColor:
+      '#FFFFFF',
+
+    shadowOpacity: 0.8,
+
+    shadowRadius: 4,
+  },
+
+  meteorPoint: {
+    position: 'absolute',
+
+    width: 3,
+    height: 3,
+
+    borderRadius: 2,
+
+    backgroundColor:
+      '#FFFFFF',
+
+    shadowColor:
+      '#FFF1C7',
+
+    shadowOpacity: 1,
+
+    shadowRadius: 5,
+
+    elevation: 4,
+  },
+
+  // ==========================================================
+  // TOP
+  // ==========================================================
+
+  topArea: {
+    position: 'absolute',
+
+    top: 35,
+
     left: 0,
     right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
+
     alignItems: 'center',
-    zIndex: 9999
+
+    zIndex: 10,
   },
 
-  customModalCard: {
-    backgroundColor: '#FFFFFF',
-    width: '85%',
-    maxWidth: 320,
-    padding: 24,
-    borderRadius: 20,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 10
-    },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 10
+  smallTitle: {
+    color: '#777B85',
+
+    fontSize: 11,
+
+    fontWeight: '700',
+
+    letterSpacing: 4,
   },
 
-  customModalTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#111827',
-    marginBottom: 10,
-    textAlign: 'center'
-  },
+  mainTitle: {
+    marginTop: 6,
 
-  customModalMessage: {
-    fontSize: 14,
-    color: '#4B5563',
-    textAlign: 'center',
-    marginBottom: 20,
-    lineHeight: 20
-  },
-
-  customModalBtn: {
-    backgroundColor: '#3B82F6',
-    width: '100%',
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center'
-  },
-
-  customModalBtnText: {
     color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700'
-  }
+
+    fontSize: 25,
+
+    fontWeight: '800',
+
+    letterSpacing: 1,
+  },
+
+  subTitle: {
+    marginTop: 5,
+
+    color: '#777B85',
+
+    fontSize: 12,
+  },
+
+  // ==========================================================
+  // ORBIT
+  // ==========================================================
+
+  orbitContainer: {
+    position: 'absolute',
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+    zIndex: 5,
+  },
+
+  orbitLine: {
+    position: 'absolute',
+
+    borderWidth: 1,
+
+    borderColor:
+      'rgba(125,113,255,0.45)',
+
+    shadowColor:
+      '#695CFF',
+
+    shadowOpacity: 0.35,
+
+    shadowRadius: 12,
+
+    elevation: 3,
+  },
+
+  rotationLayer: {
+    position: 'absolute',
+
+    left: 0,
+
+    top: 0,
+  },
+
+  // ==========================================================
+  // NODE
+  // ==========================================================
+
+  node: {
+    position: 'absolute',
+
+    width: 60,
+    height: 60,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+  },
+
+  nodeContent: {
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+    width: 100,
+
+    minHeight: 80,
+
+    marginLeft: -20,
+
+    marginTop: -10,
+  },
+
+  iconCircle: {
+    width: 52,
+    height: 52,
+
+    borderRadius: 26,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+    backgroundColor:
+      'rgba(10,10,18,0.95)',
+
+    borderWidth: 1,
+
+    borderColor:
+      'rgba(130,120,255,0.65)',
+
+    shadowColor:
+      '#6558FF',
+
+    shadowOpacity: 0.7,
+
+    shadowRadius: 12,
+
+    elevation: 8,
+  },
+
+  nodeLabel: {
+    marginTop: 6,
+
+    color: '#FFFFFF',
+
+    fontSize: 11,
+
+    fontWeight: '600',
+
+    textAlign: 'center',
+
+    textShadowColor:
+      '#000000',
+
+    textShadowOffset: {
+      width: 0,
+      height: 1,
+    },
+
+    textShadowRadius: 4,
+  },
+
+  // ==========================================================
+  // CENTER
+  // ==========================================================
+
+  centerCore: {
+    width: 100,
+    height: 100,
+
+    borderRadius: 50,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+    position: 'absolute',
+
+    left: '50%',
+
+    top: '50%',
+
+    marginLeft: -50,
+
+    marginTop: -50,
+
+    backgroundColor:
+      'rgba(40,30,120,0.35)',
+
+    shadowColor:
+      '#675BFF',
+
+    shadowOpacity: 0.9,
+
+    shadowRadius: 30,
+
+    elevation: 15,
+  },
+
+  centerGlow: {
+    position: 'absolute',
+
+    width: 120,
+    height: 120,
+
+    borderRadius: 60,
+
+    backgroundColor:
+      'rgba(85,70,255,0.10)',
+
+    shadowColor:
+      '#675BFF',
+
+    shadowOpacity: 0.9,
+
+    shadowRadius: 35,
+  },
+
+  centerInner: {
+    width: 72,
+    height: 72,
+
+    borderRadius: 36,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+    backgroundColor:
+      '#17152F',
+
+    borderWidth: 1,
+
+    borderColor:
+      'rgba(140,130,255,0.65)',
+
+    shadowColor:
+      '#6A5CFF',
+
+    shadowOpacity: 0.8,
+
+    shadowRadius: 18,
+
+    elevation: 10,
+  },
+
+  // ==========================================================
+  // BOTTOM
+  // ==========================================================
+
+  bottomArea: {
+    position: 'absolute',
+
+    left: 0,
+    right: 0,
+
+    bottom: 28,
+
+    alignItems: 'center',
+
+    zIndex: 10,
+  },
+
+  bottomTitle: {
+    color: '#FFFFFF',
+
+    fontSize: 13,
+
+    fontWeight: '700',
+  },
+
+  bottomText: {
+    marginTop: 4,
+
+    color: '#666A73',
+
+    fontSize: 11,
+  },
+
 });
