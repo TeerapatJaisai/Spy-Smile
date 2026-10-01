@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   Image,
   Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,11 +14,11 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-const API_URL =
-  'http://119.59.102.161:3100/api';
+const API_URL = 'http://119.59.102.161:3100/api';
 
-const { width, height } =
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } =
   Dimensions.get('window');
 
 type Product = {
@@ -27,30 +29,25 @@ type Product = {
   image: string | null;
   serial_number: string | null;
   brand: string | null;
-  vram: string | null;
+  vram: string | number | null;
   cost_price: number;
   selling_price: number;
 };
 
-type AlertType =
-  | 'success'
-  | 'error'
-  | 'warning';
-
 export default function ProductScreen() {
-  const [products, setProducts] =
-    useState<Product[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
 
-  const [search, setSearch] =
-    useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
 
-  const [loading, setLoading] =
-    useState(true);
+  const [selectedProduct, setSelectedProduct] =
+    useState<Product | null>(null);
 
-  const [isAdmin, setIsAdmin] =
+  const [showDetail, setShowDetail] =
     useState(false);
 
-  const [modalVisible, setModalVisible] =
+  const [showForm, setShowForm] =
     useState(false);
 
   const [editingProduct, setEditingProduct] =
@@ -68,65 +65,43 @@ export default function ProductScreen() {
     selling_price: '',
   });
 
-  /* =========================
-     APP ALERT
-  ========================= */
-
   const [alertInfo, setAlertInfo] = useState({
     visible: false,
     title: '',
     message: '',
-    type: 'success' as AlertType,
   });
 
   const showAlert = (
     title: string,
-    message: string,
-    type: AlertType = 'success'
+    message: string
   ) => {
     setAlertInfo({
       visible: true,
       title,
       message,
-      type,
     });
   };
 
-  const closeAlert = () => {
-    setAlertInfo({
-      visible: false,
-      title: '',
-      message: '',
-      type: 'success',
-    });
-  };
-
-  /* =========================
-     DELETE CONFIRM
-  ========================= */
-
-  const [deleteProduct, setDeleteProduct] =
-    useState<Product | null>(null);
-
-  /* =========================
-     LOAD PRODUCTS
-  ========================= */
+  // ============================================================
+  // CHECK ROLE + LOAD
+  // ============================================================
 
   useEffect(() => {
     if (Platform.OS === 'web') {
       const role =
-        window.localStorage.getItem(
-          'role'
-        );
+        window.localStorage.getItem('role');
 
       setIsAdmin(
-        role?.trim().toLowerCase() ===
-          'admin'
+        role?.trim().toLowerCase() === 'admin'
       );
     }
 
     loadProducts();
   }, []);
+
+  // ============================================================
+  // LOAD PRODUCTS
+  // ============================================================
 
   const loadProducts = async () => {
     try {
@@ -136,18 +111,19 @@ export default function ProductScreen() {
         `${API_URL}/products`
       );
 
+      const data = await response.json();
+
       if (!response.ok) {
         throw new Error(
-          'ไม่สามารถโหลดสินค้าได้'
+          data?.error ||
+            'โหลดข้อมูลสินค้าไม่สำเร็จ'
         );
       }
-
-      const data = await response.json();
 
       setProducts(
         Array.isArray(data)
           ? data
-          : []
+          : data.products || []
       );
     } catch (error: any) {
       console.log(
@@ -158,17 +134,16 @@ export default function ProductScreen() {
       showAlert(
         'เกิดข้อผิดพลาด',
         error?.message ||
-          'ไม่สามารถโหลดสินค้าได้',
-        'error'
+          'ไม่สามารถโหลดสินค้าได้'
       );
     } finally {
       setLoading(false);
     }
   };
 
-  /* =========================
-     IMAGE URL
-  ========================= */
+  // ============================================================
+  // IMAGE URL
+  // ============================================================
 
   const getImageUrl = (
     image: string | null
@@ -187,18 +162,6 @@ export default function ProductScreen() {
       return value;
     }
 
-    if (
-      value.startsWith('/uploads/')
-    ) {
-      return `${API_URL}${value}`;
-    }
-
-    if (
-      value.startsWith('uploads/')
-    ) {
-      return `${API_URL}/${value}`;
-    }
-
     if (value.startsWith('/')) {
       return `${API_URL}${value}`;
     }
@@ -206,11 +169,129 @@ export default function ProductScreen() {
     return `${API_URL}/${value}`;
   };
 
-  /* =========================
-     OPEN ADD
-  ========================= */
+  // ============================================================
+  // FILTER
+  // ============================================================
 
-  const openAddModal = () => {
+  const filteredProducts =
+    products.filter((product) => {
+      const keyword =
+        search.trim().toLowerCase();
+
+      if (!keyword) return true;
+
+      return (
+        product.name
+          ?.toLowerCase()
+          .includes(keyword) ||
+        product.brand
+          ?.toLowerCase()
+          .includes(keyword) ||
+        product.category
+          ?.toLowerCase()
+          .includes(keyword) ||
+        String(product.vram || '')
+          .toLowerCase()
+          .includes(keyword)
+      );
+    });
+
+  // ============================================================
+  // ADD TO CART
+  // ============================================================
+
+  const addToCart = async (
+    product: Product
+  ) => {
+    if (Number(product.stock) <= 0) {
+      showAlert(
+        'สินค้าหมด',
+        'สินค้านี้ไม่มีสินค้าในสต็อก'
+      );
+      return;
+    }
+
+    try {
+      let userId: string | null = null;
+
+      if (Platform.OS === 'web') {
+        userId =
+          window.localStorage.getItem(
+            'userId'
+          );
+      }
+
+      if (!userId) {
+        showAlert(
+          'กรุณาเข้าสู่ระบบ',
+          'กรุณาเข้าสู่ระบบก่อนซื้อสินค้า'
+        );
+        return;
+      }
+
+      const response = await fetch(
+        `${API_URL}/cart`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type':
+              'application/json',
+          },
+          body: JSON.stringify({
+            user_id: Number(userId),
+            product_id: product.id,
+            quantity: 1,
+          }),
+        }
+      );
+
+      const result =
+        await response
+          .json()
+          .catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(
+          result?.error ||
+            result?.message ||
+            'เพิ่มสินค้าลงตะกร้าไม่สำเร็จ'
+        );
+      }
+
+      showAlert(
+        'เพิ่มสินค้าแล้ว',
+        `${product.name} ถูกเพิ่มลงตะกร้าแล้ว`
+      );
+    } catch (error: any) {
+      console.log(
+        'ADD TO CART ERROR:',
+        error
+      );
+
+      showAlert(
+        'เกิดข้อผิดพลาด',
+        error?.message ||
+          'ไม่สามารถเพิ่มสินค้าลงตะกร้าได้'
+      );
+    }
+  };
+
+  // ============================================================
+  // OPEN DETAIL
+  // ============================================================
+
+  const openDetail = (
+    product: Product
+  ) => {
+    setSelectedProduct(product);
+    setShowDetail(true);
+  };
+
+  // ============================================================
+  // OPEN ADD
+  // ============================================================
+
+  const openAdd = () => {
     setEditingProduct(null);
 
     setForm({
@@ -225,62 +306,54 @@ export default function ProductScreen() {
       selling_price: '',
     });
 
-    setModalVisible(true);
+    setShowForm(true);
   };
 
-  /* =========================
-     OPEN EDIT
-  ========================= */
+  // ============================================================
+  // OPEN EDIT
+  // ============================================================
 
-  const openEditModal = (
+  const openEdit = (
     product: Product
   ) => {
     setEditingProduct(product);
 
     setForm({
       name: product.name || '',
-      stock:
-        product.stock?.toString() || '',
+      stock: String(
+        product.stock ?? ''
+      ),
       category:
         product.category || '',
-      image:
-        product.image || '',
+      image: product.image || '',
       serial_number:
         product.serial_number || '',
-      brand:
-        product.brand || '',
+      brand: product.brand || '',
       vram:
-        product.vram || '',
-      cost_price:
-        product.cost_price?.toString() ||
-        '',
-      selling_price:
-        product.selling_price?.toString() ||
-        '',
+        product.vram !== null &&
+        product.vram !== undefined
+          ? String(product.vram)
+          : '',
+      cost_price: String(
+        product.cost_price ?? ''
+      ),
+      selling_price: String(
+        product.selling_price ?? ''
+      ),
     });
 
-    setModalVisible(true);
+    setShowForm(true);
   };
 
-  /* =========================
-     SAVE PRODUCT
-  ========================= */
+  // ============================================================
+  // SAVE PRODUCT
+  // ============================================================
 
   const saveProduct = async () => {
     if (!form.name.trim()) {
       showAlert(
         'ข้อมูลไม่ครบ',
-        'กรุณากรอกชื่อสินค้า',
-        'warning'
-      );
-      return;
-    }
-
-    if (!form.selling_price.trim()) {
-      showAlert(
-        'ข้อมูลไม่ครบ',
-        'กรุณากรอกราคาขาย',
-        'warning'
+        'กรุณากรอกชื่อสินค้า'
       );
       return;
     }
@@ -288,18 +361,23 @@ export default function ProductScreen() {
     try {
       const body = {
         name: form.name.trim(),
-        stock: Number(form.stock) || 0,
+        stock:
+          Number(form.stock) || 0,
         category:
-          form.category.trim() || null,
+          form.category.trim() ||
+          null,
         image:
-          form.image.trim() || null,
+          form.image.trim() ||
+          null,
         serial_number:
           form.serial_number.trim() ||
           null,
         brand:
-          form.brand.trim() || null,
+          form.brand.trim() ||
+          null,
         vram:
-          form.vram.trim() || null,
+          form.vram.trim() ||
+          null,
         cost_price:
           Number(form.cost_price) || 0,
         selling_price:
@@ -347,19 +425,16 @@ export default function ProductScreen() {
         );
       }
 
-      setModalVisible(false);
-
-      await loadProducts();
+      setShowForm(false);
 
       showAlert(
+        'สำเร็จ',
         editingProduct
-          ? 'แก้ไขสินค้าสำเร็จ'
-          : 'เพิ่มสินค้าสำเร็จ',
-        editingProduct
-          ? 'ข้อมูลสินค้าถูกแก้ไขแล้ว'
-          : 'เพิ่มสินค้าเข้าสู่ระบบแล้ว',
-        'success'
+          ? 'แก้ไขสินค้าเรียบร้อยแล้ว'
+          : 'เพิ่มสินค้าเรียบร้อยแล้ว'
       );
+
+      await loadProducts();
     } catch (error: any) {
       console.log(
         'SAVE PRODUCT ERROR:',
@@ -369,29 +444,33 @@ export default function ProductScreen() {
       showAlert(
         'เกิดข้อผิดพลาด',
         error?.message ||
-          'ไม่สามารถบันทึกสินค้าได้',
-        'error'
+          'ไม่สามารถบันทึกสินค้าได้'
       );
     }
   };
 
-  /* =========================
-     DELETE
-  ========================= */
+  // ============================================================
+  // DELETE PRODUCT
+  // ============================================================
 
-  const askDelete = (
+  const deleteProduct = async (
     product: Product
   ) => {
-    setDeleteProduct(product);
-  };
+    const confirmDelete =
+      Platform.OS === 'web'
+        ? window.confirm(
+            `ต้องการลบ "${product.name}" หรือไม่?`
+          )
+        : true;
 
-  const confirmDelete = async () => {
-    if (!deleteProduct) return;
+    if (!confirmDelete) {
+      return;
+    }
 
     try {
       const response =
         await fetch(
-          `${API_URL}/products/${deleteProduct.id}`,
+          `${API_URL}/products/${product.id}`,
           {
             method: 'DELETE',
           }
@@ -410,153 +489,37 @@ export default function ProductScreen() {
         );
       }
 
-      const deletedName =
-        deleteProduct.name;
-
-      setDeleteProduct(null);
-
-      await loadProducts();
+      if (
+        selectedProduct?.id ===
+        product.id
+      ) {
+        setShowDetail(false);
+        setSelectedProduct(null);
+      }
 
       showAlert(
-        'ลบสินค้าสำเร็จ',
-        `${deletedName} ถูกลบออกจากระบบแล้ว`,
-        'success'
+        'ลบสินค้าแล้ว',
+        `${product.name} ถูกลบออกจากระบบแล้ว`
       );
+
+      await loadProducts();
     } catch (error: any) {
       console.log(
         'DELETE PRODUCT ERROR:',
         error
       );
 
-      setDeleteProduct(null);
-
       showAlert(
         'เกิดข้อผิดพลาด',
         error?.message ||
-          'ไม่สามารถลบสินค้าได้',
-        'error'
+          'ไม่สามารถลบสินค้าได้'
       );
     }
   };
 
-  /* =========================
-     ADD TO CART
-  ========================= */
-
-  const addToCart = async (
-    product: Product
-  ) => {
-    if (Number(product.stock) <= 0) {
-      showAlert(
-        'สินค้าหมด',
-        'สินค้านี้ไม่มีสินค้าในสต็อก',
-        'error'
-      );
-      return;
-    }
-
-    try {
-      let userId: string | null =
-        null;
-
-      if (Platform.OS === 'web') {
-        userId =
-          window.localStorage.getItem(
-            'userId'
-          );
-      }
-
-      if (!userId) {
-        showAlert(
-          'กรุณาเข้าสู่ระบบ',
-          'กรุณาเข้าสู่ระบบก่อนซื้อสินค้า',
-          'warning'
-        );
-        return;
-      }
-
-      const response =
-        await fetch(
-          `${API_URL}/cart`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type':
-                'application/json',
-            },
-            body: JSON.stringify({
-              user_id: Number(userId),
-              product_id: product.id,
-              quantity: 1,
-            }),
-          }
-        );
-
-      const result =
-        await response
-          .json()
-          .catch(() => null);
-
-      if (!response.ok) {
-        throw new Error(
-          result?.error ||
-            result?.message ||
-            'เพิ่มสินค้าลงตะกร้าไม่สำเร็จ'
-        );
-      }
-
-      showAlert(
-        'เพิ่มสินค้าแล้ว',
-        `${product.name} ถูกเพิ่มลงตะกร้าแล้ว`,
-        'success'
-      );
-    } catch (error: any) {
-      console.log(
-        'ADD TO CART ERROR:',
-        error
-      );
-
-      showAlert(
-        'เกิดข้อผิดพลาด',
-        error?.message ||
-          'ไม่สามารถเพิ่มสินค้าลงตะกร้าได้',
-        'error'
-      );
-    }
-  };
-
-  /* =========================
-     SEARCH
-  ========================= */
-
-  const filteredProducts =
-    products.filter((product) => {
-      const keyword =
-        search
-          .trim()
-          .toLowerCase();
-
-      if (!keyword) return true;
-
-      return (
-        product.name
-          ?.toLowerCase()
-          .includes(keyword) ||
-        product.brand
-          ?.toLowerCase()
-          .includes(keyword) ||
-        product.category
-          ?.toLowerCase()
-          .includes(keyword) ||
-        product.serial_number
-          ?.toLowerCase()
-          .includes(keyword)
-      );
-    });
-
-  /* =========================
-     LOADING
-  ========================= */
+  // ============================================================
+  // LOADING
+  // ============================================================
 
   if (loading) {
     return (
@@ -570,54 +533,63 @@ export default function ProductScreen() {
         >
           <ActivityIndicator
             size="large"
-            color="#635BFF"
+            color="#695CFF"
           />
 
           <Text
-            style={styles.loadingText}
+            style={
+              styles.loadingText
+            }
           >
-            LOADING PRODUCTS...
+            Loading products...
           </Text>
         </View>
       </View>
     );
   }
 
-  /* =========================
-     MAIN
-  ========================= */
+  // ============================================================
+  // RENDER
+  // ============================================================
 
   return (
     <View style={styles.container}>
       <SpaceBackground />
 
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={
-          styles.content
-        }
         showsVerticalScrollIndicator={
           false
         }
+        contentContainerStyle={
+          styles.scrollContent
+        }
       >
-        {/* HEADER */}
+        {/* ======================================================
+            HEADER
+            ====================================================== */}
 
         <View style={styles.header}>
           <View>
             <Text
-              style={styles.smallTitle}
+              style={
+                styles.smallTitle
+              }
             >
               STORE
             </Text>
 
             <Text
-              style={styles.pageTitle}
+              style={
+                styles.headerTitle
+              }
             >
               Products
             </Text>
 
             <Text
-              style={styles.pageSubtitle}
+              style={
+                styles.headerSubtitle
+              }
             >
               Choose your IT products
             </Text>
@@ -625,44 +597,67 @@ export default function ProductScreen() {
 
           {isAdmin && (
             <TouchableOpacity
-              style={styles.addButton}
-              onPress={openAddModal}
-              activeOpacity={0.8}
+              style={
+                styles.addButton
+              }
+              onPress={openAdd}
             >
+              <MaterialCommunityIcons
+                name="plus"
+                size={18}
+                color="#FFFFFF"
+              />
+
               <Text
                 style={
                   styles.addButtonText
                 }
               >
-                + Add
+                Add
               </Text>
             </TouchableOpacity>
           )}
         </View>
 
-        {/* SEARCH */}
+        {/* ======================================================
+            SEARCH
+            ====================================================== */}
 
-        <View style={styles.searchBox}>
-          <Text
-            style={styles.searchIcon}
+        <View
+          style={
+            styles.searchRow
+          }
+        >
+          <View
+            style={
+              styles.searchBox
+            }
           >
-            ⌕
-          </Text>
+            <MaterialCommunityIcons
+              name="magnify"
+              size={20}
+              color="#777B85"
+            />
 
-          <TextInput
-            style={styles.searchInput}
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Search products..."
-            placeholderTextColor="#555967"
-          />
+            <TextInput
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Search products..."
+              placeholderTextColor="#555862"
+              style={
+                styles.searchInput
+              }
+            />
+          </View>
 
           <View
-            style={styles.productCount}
+            style={
+              styles.countBox
+            }
           >
             <Text
               style={
-                styles.productCountLabel
+                styles.countLabel
               }
             >
               PRODUCTS
@@ -670,7 +665,7 @@ export default function ProductScreen() {
 
             <Text
               style={
-                styles.productCountNumber
+                styles.countNumber
               }
             >
               {filteredProducts.length}
@@ -678,32 +673,16 @@ export default function ProductScreen() {
           </View>
         </View>
 
-        {/* PRODUCTS */}
+        {/* ======================================================
+            PRODUCT GRID
+            ====================================================== */}
 
-        {filteredProducts.length === 0 ? (
-          <View
-            style={styles.emptyBox}
-          >
-            <Text
-              style={styles.emptyIcon}
-            >
-              📦
-            </Text>
-
-            <Text
-              style={styles.emptyTitle}
-            >
-              No products found
-            </Text>
-
-            <Text
-              style={styles.emptyText}
-            >
-              ยังไม่มีสินค้าที่ตรงกับการค้นหา
-            </Text>
-          </View>
-        ) : (
-          filteredProducts.map(
+        <View
+          style={
+            styles.productGrid
+          }
+        >
+          {filteredProducts.map(
             (product) => {
               const imageUrl =
                 getImageUrl(
@@ -711,10 +690,15 @@ export default function ProductScreen() {
                 );
 
               return (
-                <View
+                <Pressable
                   key={product.id}
                   style={
                     styles.productCard
+                  }
+                  onPress={() =>
+                    openDetail(
+                      product
+                    )
                   }
                 >
                   {/* IMAGE */}
@@ -735,147 +719,56 @@ export default function ProductScreen() {
                         resizeMode="contain"
                       />
                     ) : (
-                      <Text
-                        style={
-                          styles.noImage
-                        }
-                      >
-                        NO IMAGE
-                      </Text>
+                      <MaterialCommunityIcons
+                        name="image-off-outline"
+                        size={38}
+                        color="#555862"
+                      />
                     )}
                   </View>
 
-                  {/* INFO */}
+                  {/* NAME */}
 
-                  <View
+                  <Text
                     style={
-                      styles.productInfo
+                      styles.productName
                     }
+                    numberOfLines={2}
                   >
-                    <Text
-                      style={
-                        styles.productName
-                      }
-                      numberOfLines={2}
-                    >
-                      {product.name}
-                    </Text>
+                    {product.name}
+                  </Text>
 
-                    <Text
-                      style={
-                        styles.productBrand
-                      }
-                    >
-                      {product.brand ||
-                        'IT PRODUCT'}
-                    </Text>
+                  {/* BRAND */}
 
-                    <View
-                      style={
-                        styles.tags
-                      }
-                    >
-                      <View
-                        style={
-                          styles.categoryTag
-                        }
-                      >
-                        <Text
-                          style={
-                            styles.categoryTagText
-                          }
-                        >
-                          {product.category ||
-                            'Uncategorized'}
-                        </Text>
-                      </View>
-
-                      {product.vram && (
-                        <View
-                          style={
-                            styles.vramTag
-                          }
-                        >
-                          <Text
-                            style={
-                              styles.vramTagText
-                            }
-                          >
-                            {product.vram}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-
-                    {product.serial_number && (
-                      <Text
-                        style={
-                          styles.serialText
-                        }
-                      >
-                        S/N:{' '}
-                        {
-                          product.serial_number
-                        }
-                      </Text>
-                    )}
-                  </View>
+                  <Text
+                    style={
+                      styles.productBrand
+                    }
+                    numberOfLines={1}
+                  >
+                    {product.brand ||
+                      'Unknown Brand'}
+                  </Text>
 
                   {/* PRICE */}
 
-                  <View
+                  <Text
                     style={
-                      styles.priceSection
+                      styles.priceText
                     }
                   >
-                    <Text
-                      style={
-                        styles.priceLabel
-                      }
-                    >
-                      PRICE
-                    </Text>
-
-                    <Text
-                      style={
-                        styles.priceText
-                      }
-                    >
-                      ฿
-                      {Number(
-                        product.selling_price
-                      ).toLocaleString()}
-                    </Text>
-
-                    {isAdmin && (
-                      <>
-                        <Text
-                          style={
-                            styles.costLabel
-                          }
-                        >
-                          COST
-                        </Text>
-
-                        <Text
-                          style={
-                            styles.costText
-                          }
-                        >
-                          ฿
-                          {Number(
-                            product.cost_price
-                          ).toLocaleString()}
-                        </Text>
-                      </>
-                    )}
-                  </View>
+                    ฿
+                    {Number(
+                      product.selling_price ||
+                        0
+                    ).toLocaleString()}
+                  </Text>
 
                   {/* STOCK */}
 
                   <View
                     style={
-                      styles.stockSection
+                      styles.stockRow
                     }
                   >
                     <Text
@@ -883,7 +776,7 @@ export default function ProductScreen() {
                         styles.stockLabel
                       }
                     >
-                      STOCK
+                      Stock
                     </Text>
 
                     <View
@@ -892,14 +785,7 @@ export default function ProductScreen() {
                         Number(
                           product.stock
                         ) <= 0 &&
-                          styles.stockBadgeEmpty,
-                        Number(
-                          product.stock
-                        ) > 0 &&
-                          Number(
-                            product.stock
-                          ) <= 5 &&
-                          styles.stockBadgeLow,
+                          styles.stockEmpty,
                       ]}
                     >
                       <Text
@@ -912,115 +798,444 @@ export default function ProductScreen() {
                     </View>
                   </View>
 
-                  {/* ACTIONS */}
+                  {/* USER BUY */}
+
+                  {!isAdmin && (
+                    <TouchableOpacity
+                      style={[
+                        styles.buyButton,
+                        Number(
+                          product.stock
+                        ) <= 0 &&
+                          styles.buyButtonDisabled,
+                      ]}
+                      onPress={(event) => {
+                        event.stopPropagation();
+                        addToCart(
+                          product
+                        );
+                      }}
+                      disabled={
+                        Number(
+                          product.stock
+                        ) <= 0
+                      }
+                    >
+                      <MaterialCommunityIcons
+                        name="cart-plus"
+                        size={17}
+                        color="#FFFFFF"
+                      />
+
+                      <Text
+                        style={
+                          styles.buyButtonText
+                        }
+                      >
+                        {Number(
+                          product.stock
+                        ) <= 0
+                          ? 'Out'
+                          : 'Buy'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* ADMIN BUTTONS */}
+
+                  {isAdmin && (
+                    <View
+                      style={
+                        styles.adminButtons
+                      }
+                    >
+                      <TouchableOpacity
+                        style={
+                          styles.editButton
+                        }
+                        onPress={(event) => {
+                          event.stopPropagation();
+                          openEdit(
+                            product
+                          );
+                        }}
+                      >
+                        <MaterialCommunityIcons
+                          name="pencil-outline"
+                          size={15}
+                          color="#FFFFFF"
+                        />
+
+                        <Text
+                          style={
+                            styles.buttonText
+                          }
+                        >
+                          Edit
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={
+                          styles.deleteButton
+                        }
+                        onPress={(event) => {
+                          event.stopPropagation();
+                          deleteProduct(
+                            product
+                          );
+                        }}
+                      >
+                        <MaterialCommunityIcons
+                          name="delete-outline"
+                          size={15}
+                          color="#FF6B81"
+                        />
+
+                        <Text
+                          style={
+                            styles.deleteText
+                          }
+                        >
+                          Delete
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  {/* VIEW */}
 
                   <View
                     style={
-                      styles.actionSection
+                      styles.viewHint
                     }
                   >
-                    {isAdmin ? (
-                      <>
-                        <TouchableOpacity
-                          style={
-                            styles.editButton
-                          }
-                          onPress={() =>
-                            openEditModal(
-                              product
-                            )
-                          }
-                          activeOpacity={0.8}
-                        >
-                          <Text
-                            style={
-                              styles.editButtonText
-                            }
-                          >
-                            Edit
-                          </Text>
-                        </TouchableOpacity>
+                    <Text
+                      style={
+                        styles.viewHintText
+                      }
+                    >
+                      Tap to view
+                    </Text>
 
-                        <TouchableOpacity
-                          style={
-                            styles.deleteButton
-                          }
-                          onPress={() =>
-                            askDelete(
-                              product
-                            )
-                          }
-                          activeOpacity={0.8}
-                        >
-                          <Text
-                            style={
-                              styles.deleteButtonText
-                            }
-                          >
-                            Delete
-                          </Text>
-                        </TouchableOpacity>
-                      </>
-                    ) : (
-                      <TouchableOpacity
-                        style={[
-                          styles.buyButton,
-                          Number(
-                            product.stock
-                          ) <= 0 &&
-                            styles.buyButtonDisabled,
-                        ]}
-                        onPress={() =>
-                          addToCart(
-                            product
-                          )
-                        }
-                        disabled={
-                          Number(
-                            product.stock
-                          ) <= 0
-                        }
-                        activeOpacity={0.8}
-                      >
-                        <Text
-                          style={
-                            styles.cartIcon
-                          }
-                        >
-                          🛒
-                        </Text>
-
-                        <Text
-                          style={
-                            styles.buyButtonText
-                          }
-                        >
-                          {Number(
-                            product.stock
-                          ) <= 0
-                            ? 'Out of Stock'
-                            : 'Buy'}
-                        </Text>
-                      </TouchableOpacity>
-                    )}
+                    <MaterialCommunityIcons
+                      name="chevron-right"
+                      size={15}
+                      color="#777B85"
+                    />
                   </View>
-                </View>
+                </Pressable>
               );
             }
-          )
+          )}
+        </View>
+
+        {/* EMPTY */}
+
+        {filteredProducts.length ===
+          0 && (
+          <View
+            style={
+              styles.emptyContainer
+            }
+          >
+            <MaterialCommunityIcons
+              name="package-variant"
+              size={55}
+              color="#4A4C55"
+            />
+
+            <Text
+              style={
+                styles.emptyTitle
+              }
+            >
+              No products found
+            </Text>
+
+            <Text
+              style={
+                styles.emptyText
+              }
+            >
+              Try another search
+            </Text>
+          </View>
         )}
       </ScrollView>
 
-      {/* =================================================
-          ADD / EDIT MODAL
-      ================================================= */}
+      {/* ========================================================
+          PRODUCT DETAIL MODAL
+          ======================================================== */}
 
       <Modal
-        visible={modalVisible}
+        visible={showDetail}
         transparent
         animationType="fade"
         onRequestClose={() =>
-          setModalVisible(false)
+          setShowDetail(false)
+        }
+      >
+        <View
+          style={
+            styles.modalOverlay
+          }
+        >
+          <View
+            style={
+              styles.detailModal
+            }
+          >
+            <TouchableOpacity
+              style={
+                styles.closeButton
+              }
+              onPress={() =>
+                setShowDetail(false)
+              }
+            >
+              <MaterialCommunityIcons
+                name="close"
+                size={22}
+                color="#FFFFFF"
+              />
+            </TouchableOpacity>
+
+            {selectedProduct && (
+              <ScrollView
+                showsVerticalScrollIndicator={
+                  false
+                }
+                contentContainerStyle={
+                  styles.detailContent
+                }
+              >
+                <View
+                  style={
+                    styles.detailImageBox
+                  }
+                >
+                  {getImageUrl(
+                    selectedProduct.image
+                  ) ? (
+                    <Image
+                      source={{
+                        uri:
+                          getImageUrl(
+                            selectedProduct.image
+                          ) as string,
+                      }}
+                      style={
+                        styles.detailImage
+                      }
+                      resizeMode="contain"
+                    />
+                  ) : (
+                    <MaterialCommunityIcons
+                      name="image-off-outline"
+                      size={60}
+                      color="#555862"
+                    />
+                  )}
+                </View>
+
+                <Text
+                  style={
+                    styles.detailTitle
+                  }
+                >
+                  {
+                    selectedProduct.name
+                  }
+                </Text>
+
+                <Text
+                  style={
+                    styles.detailBrand
+                  }
+                >
+                  {selectedProduct.brand ||
+                    'Unknown Brand'}
+                </Text>
+
+                <Text
+                  style={
+                    styles.detailPrice
+                  }
+                >
+                  ฿
+                  {Number(
+                    selectedProduct.selling_price ||
+                      0
+                  ).toLocaleString()}
+                </Text>
+
+                <View
+                  style={
+                    styles.detailGrid
+                  }
+                >
+                  <DetailItem
+                    label="Stock"
+                    value={String(
+                      selectedProduct.stock
+                    )}
+                  />
+
+                  <DetailItem
+                    label="Category"
+                    value={
+                      selectedProduct.category ||
+                      '-'
+                    }
+                  />
+
+                  <DetailItem
+                    label="VRAM"
+                    value={
+                      selectedProduct.vram
+                        ? String(
+                            selectedProduct.vram
+                          )
+                        : '-'
+                    }
+                  />
+
+                  <DetailItem
+                    label="Serial Number"
+                    value={
+                      selectedProduct.serial_number ||
+                      '-'
+                    }
+                  />
+
+                  {isAdmin && (
+                    <DetailItem
+                      label="Cost Price"
+                      value={`฿${Number(
+                        selectedProduct.cost_price ||
+                          0
+                      ).toLocaleString()}`}
+                    />
+                  )}
+                </View>
+
+                {!isAdmin && (
+                  <TouchableOpacity
+                    style={[
+                      styles.detailBuyButton,
+                      Number(
+                        selectedProduct.stock
+                      ) <= 0 &&
+                        styles.buyButtonDisabled,
+                    ]}
+                    onPress={() =>
+                      addToCart(
+                        selectedProduct
+                      )
+                    }
+                    disabled={
+                      Number(
+                        selectedProduct.stock
+                      ) <= 0
+                    }
+                  >
+                    <MaterialCommunityIcons
+                      name="cart-plus"
+                      size={20}
+                      color="#FFFFFF"
+                    />
+
+                    <Text
+                      style={
+                        styles.detailBuyText
+                      }
+                    >
+                      {Number(
+                        selectedProduct.stock
+                      ) <= 0
+                        ? 'สินค้าหมด'
+                        : 'เพิ่มลงตะกร้า'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                {isAdmin && (
+                  <View
+                    style={
+                      styles.detailAdminRow
+                    }
+                  >
+                    <TouchableOpacity
+                      style={
+                        styles.detailEditButton
+                      }
+                      onPress={() => {
+                        setShowDetail(
+                          false
+                        );
+                        openEdit(
+                          selectedProduct
+                        );
+                      }}
+                    >
+                      <MaterialCommunityIcons
+                        name="pencil-outline"
+                        size={19}
+                        color="#FFFFFF"
+                      />
+
+                      <Text
+                        style={
+                          styles.detailButtonText
+                        }
+                      >
+                        Edit
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={
+                        styles.detailDeleteButton
+                      }
+                      onPress={() =>
+                        deleteProduct(
+                          selectedProduct
+                        )
+                      }
+                    >
+                      <MaterialCommunityIcons
+                        name="delete-outline"
+                        size={19}
+                        color="#FF6B81"
+                      />
+
+                      <Text
+                        style={
+                          styles.detailDeleteText
+                        }
+                      >
+                        Delete
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* ========================================================
+          ADD / EDIT MODAL
+          ======================================================== */}
+
+      <Modal
+        visible={showForm}
+        transparent
+        animationType="fade"
+        onRequestClose={() =>
+          setShowForm(false)
         }
       >
         <View
@@ -1033,62 +1248,57 @@ export default function ProductScreen() {
               styles.formModal
             }
           >
+            <View
+              style={
+                styles.formHeader
+              }
+            >
+              <View>
+                <Text
+                  style={
+                    styles.formTitle
+                  }
+                >
+                  {editingProduct
+                    ? 'Edit Product'
+                    : 'Add Product'}
+                </Text>
+
+                <Text
+                  style={
+                    styles.formSubtitle
+                  }
+                >
+                  Product information
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={
+                  styles.closeButton
+                }
+                onPress={() =>
+                  setShowForm(false)
+                }
+              >
+                <MaterialCommunityIcons
+                  name="close"
+                  size={22}
+                  color="#FFFFFF"
+                />
+              </TouchableOpacity>
+            </View>
+
             <ScrollView
               showsVerticalScrollIndicator={
                 false
               }
+              contentContainerStyle={
+                styles.formContent
+              }
             >
-              <View
-                style={
-                  styles.modalHeader
-                }
-              >
-                <View>
-                  <Text
-                    style={
-                      styles.modalTitle
-                    }
-                  >
-                    {editingProduct
-                      ? 'Edit Product'
-                      : 'Add Product'}
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.modalSubtitle
-                    }
-                  >
-                    {editingProduct
-                      ? 'Update product information'
-                      : 'Create a new product'}
-                  </Text>
-                </View>
-
-                <TouchableOpacity
-                  style={
-                    styles.closeButton
-                  }
-                  onPress={() =>
-                    setModalVisible(
-                      false
-                    )
-                  }
-                >
-                  <Text
-                    style={
-                      styles.closeButtonText
-                    }
-                  >
-                    ×
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* NAME */}
-
               <FormInput
-                label="PRODUCT NAME"
+                label="Product Name"
                 value={form.name}
                 onChangeText={(value) =>
                   setForm({
@@ -1096,41 +1306,100 @@ export default function ProductScreen() {
                     name: value,
                   })
                 }
-                placeholder="Enter product name"
               />
 
-              {/* BRAND */}
-
-              <FormInput
-                label="BRAND"
-                value={form.brand}
-                onChangeText={(value) =>
-                  setForm({
-                    ...form,
-                    brand: value,
-                  })
+              <View
+                style={
+                  styles.formTwoColumns
                 }
-                placeholder="Enter brand"
-              />
+              >
+                <View
+                  style={
+                    styles.formHalf
+                  }
+                >
+                  <FormInput
+                    label="Stock"
+                    value={form.stock}
+                    onChangeText={(value) =>
+                      setForm({
+                        ...form,
+                        stock: value,
+                      })
+                    }
+                    keyboardType="numeric"
+                  />
+                </View>
 
-              {/* CATEGORY */}
+                <View
+                  style={
+                    styles.formHalf
+                  }
+                >
+                  <FormInput
+                    label="Category"
+                    value={
+                      form.category
+                    }
+                    onChangeText={(
+                      value
+                    ) =>
+                      setForm({
+                        ...form,
+                        category:
+                          value,
+                      })
+                    }
+                  />
+                </View>
+              </View>
 
-              <FormInput
-                label="CATEGORY"
-                value={form.category}
-                onChangeText={(value) =>
-                  setForm({
-                    ...form,
-                    category: value,
-                  })
+              <View
+                style={
+                  styles.formTwoColumns
                 }
-                placeholder="GPU / CPU / RAM..."
-              />
+              >
+                <View
+                  style={
+                    styles.formHalf
+                  }
+                >
+                  <FormInput
+                    label="Brand"
+                    value={form.brand}
+                    onChangeText={(
+                      value
+                    ) =>
+                      setForm({
+                        ...form,
+                        brand: value,
+                      })
+                    }
+                  />
+                </View>
 
-              {/* SERIAL */}
+                <View
+                  style={
+                    styles.formHalf
+                  }
+                >
+                  <FormInput
+                    label="VRAM"
+                    value={form.vram}
+                    onChangeText={(
+                      value
+                    ) =>
+                      setForm({
+                        ...form,
+                        vram: value,
+                      })
+                    }
+                  />
+                </View>
+              </View>
 
               <FormInput
-                label="SERIAL NUMBER"
+                label="Serial Number"
                 value={
                   form.serial_number
                 }
@@ -1141,78 +1410,10 @@ export default function ProductScreen() {
                       value,
                   })
                 }
-                placeholder="Enter serial number"
               />
 
-              {/* VRAM */}
-
               <FormInput
-                label="VRAM"
-                value={form.vram}
-                onChangeText={(value) =>
-                  setForm({
-                    ...form,
-                    vram: value,
-                  })
-                }
-                placeholder="8GB / 12GB / 24GB..."
-              />
-
-              {/* STOCK */}
-
-              <FormInput
-                label="STOCK"
-                value={form.stock}
-                onChangeText={(value) =>
-                  setForm({
-                    ...form,
-                    stock: value,
-                  })
-                }
-                placeholder="0"
-                keyboardType="numeric"
-              />
-
-              {/* COST */}
-
-              <FormInput
-                label="COST PRICE"
-                value={
-                  form.cost_price
-                }
-                onChangeText={(value) =>
-                  setForm({
-                    ...form,
-                    cost_price:
-                      value,
-                  })
-                }
-                placeholder="0"
-                keyboardType="numeric"
-              />
-
-              {/* SELLING */}
-
-              <FormInput
-                label="SELLING PRICE"
-                value={
-                  form.selling_price
-                }
-                onChangeText={(value) =>
-                  setForm({
-                    ...form,
-                    selling_price:
-                      value,
-                  })
-                }
-                placeholder="0"
-                keyboardType="numeric"
-              />
-
-              {/* IMAGE */}
-
-              <FormInput
-                label="IMAGE URL"
+                label="Image URL"
                 value={form.image}
                 onChangeText={(value) =>
                   setForm({
@@ -1220,43 +1421,59 @@ export default function ProductScreen() {
                     image: value,
                   })
                 }
-                placeholder="https://..."
               />
 
-              {/* IMAGE PREVIEW */}
-
-              {getImageUrl(
-                form.image
-              ) && (
+              <View
+                style={
+                  styles.formTwoColumns
+                }
+              >
                 <View
                   style={
-                    styles.previewBox
+                    styles.formHalf
                   }
                 >
-                  <Text
-                    style={
-                      styles.previewLabel
+                  <FormInput
+                    label="Cost Price"
+                    value={
+                      form.cost_price
                     }
-                  >
-                    IMAGE PREVIEW
-                  </Text>
-
-                  <Image
-                    source={{
-                      uri:
-                        getImageUrl(
-                          form.image
-                        ) || '',
-                    }}
-                    style={
-                      styles.previewImage
+                    onChangeText={(
+                      value
+                    ) =>
+                      setForm({
+                        ...form,
+                        cost_price:
+                          value,
+                      })
                     }
-                    resizeMode="contain"
+                    keyboardType="numeric"
                   />
                 </View>
-              )}
 
-              {/* SAVE */}
+                <View
+                  style={
+                    styles.formHalf
+                  }
+                >
+                  <FormInput
+                    label="Selling Price"
+                    value={
+                      form.selling_price
+                    }
+                    onChangeText={(
+                      value
+                    ) =>
+                      setForm({
+                        ...form,
+                        selling_price:
+                          value,
+                      })
+                    }
+                    keyboardType="numeric"
+                  />
+                </View>
+              </View>
 
               <TouchableOpacity
                 style={
@@ -1265,35 +1482,21 @@ export default function ProductScreen() {
                 onPress={
                   saveProduct
                 }
-                activeOpacity={0.8}
               >
+                <MaterialCommunityIcons
+                  name="content-save-outline"
+                  size={20}
+                  color="#FFFFFF"
+                />
+
                 <Text
                   style={
                     styles.saveButtonText
                   }
                 >
                   {editingProduct
-                    ? 'SAVE CHANGES'
-                    : 'ADD PRODUCT'}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={
-                  styles.cancelButton
-                }
-                onPress={() =>
-                  setModalVisible(
-                    false
-                  )
-                }
-              >
-                <Text
-                  style={
-                    styles.cancelButtonText
-                  }
-                >
-                  CANCEL
+                    ? 'Save Changes'
+                    : 'Add Product'}
                 </Text>
               </TouchableOpacity>
             </ScrollView>
@@ -1301,18 +1504,19 @@ export default function ProductScreen() {
         </View>
       </Modal>
 
-      {/* =================================================
-          DELETE CONFIRM MODAL
-      ================================================= */}
+      {/* ========================================================
+          CUSTOM ALERT
+          ======================================================== */}
 
       <Modal
-        visible={
-          deleteProduct !== null
-        }
+        visible={alertInfo.visible}
         transparent
         animationType="fade"
         onRequestClose={() =>
-          setDeleteProduct(null)
+          setAlertInfo({
+            ...alertInfo,
+            visible: false,
+          })
         }
       >
         <View
@@ -1326,140 +1530,15 @@ export default function ProductScreen() {
             }
           >
             <View
-              style={[
-                styles.alertIcon,
-                styles.alertIconError,
-              ]}
-            >
-              <Text
-                style={
-                  styles.alertIconText
-                }
-              >
-                !
-              </Text>
-            </View>
-
-            <Text
               style={
-                styles.alertTitle
+                styles.alertIcon
               }
             >
-              ลบสินค้า?
-            </Text>
-
-            <Text
-              style={
-                styles.alertMessage
-              }
-            >
-              คุณต้องการลบ
-              {'\n'}
-              <Text
-                style={
-                  styles.alertProductName
-                }
-              >
-                {deleteProduct?.name}
-              </Text>
-              {'\n'}
-              ออกจากระบบหรือไม่?
-            </Text>
-
-            <View
-              style={
-                styles.confirmRow
-              }
-            >
-              <TouchableOpacity
-                style={
-                  styles.confirmCancel
-                }
-                onPress={() =>
-                  setDeleteProduct(
-                    null
-                  )
-                }
-              >
-                <Text
-                  style={
-                    styles.confirmCancelText
-                  }
-                >
-                  ยกเลิก
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={
-                  styles.confirmDelete
-                }
-                onPress={
-                  confirmDelete
-                }
-              >
-                <Text
-                  style={
-                    styles.confirmDeleteText
-                  }
-                >
-                  ลบสินค้า
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* =================================================
-          APP ALERT
-      ================================================= */}
-
-      <Modal
-        visible={
-          alertInfo.visible
-        }
-        transparent
-        animationType="fade"
-        onRequestClose={
-          closeAlert
-        }
-      >
-        <View
-          style={
-            styles.alertOverlay
-          }
-        >
-          <View
-            style={
-              styles.alertCard
-            }
-          >
-            <View
-              style={[
-                styles.alertIcon,
-                alertInfo.type ===
-                  'error'
-                  ? styles.alertIconError
-                  : alertInfo.type ===
-                      'warning'
-                    ? styles.alertIconWarning
-                    : styles.alertIconSuccess,
-              ]}
-            >
-              <Text
-                style={
-                  styles.alertIconText
-                }
-              >
-                {alertInfo.type ===
-                'error'
-                  ? '!'
-                  : alertInfo.type ===
-                      'warning'
-                    ? '!'
-                    : '✓'}
-              </Text>
+              <MaterialCommunityIcons
+                name="check"
+                size={24}
+                color="#FFFFFF"
+              />
             </View>
 
             <Text
@@ -1479,19 +1558,15 @@ export default function ProductScreen() {
             </Text>
 
             <TouchableOpacity
-              style={[
-                styles.alertButton,
-                alertInfo.type ===
-                  'error' &&
-                  styles.alertButtonError,
-                alertInfo.type ===
-                  'warning' &&
-                  styles.alertButtonWarning,
-              ]}
-              onPress={
-                closeAlert
+              style={
+                styles.alertButton
               }
-              activeOpacity={0.8}
+              onPress={() =>
+                setAlertInfo({
+                  ...alertInfo,
+                  visible: false,
+                })
+              }
             >
               <Text
                 style={
@@ -1508,15 +1583,51 @@ export default function ProductScreen() {
   );
 }
 
-/* =====================================================
-   FORM INPUT
-===================================================== */
+// ============================================================
+// DETAIL ITEM
+// ============================================================
+
+function DetailItem({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <View
+      style={
+        styles.detailItem
+      }
+    >
+      <Text
+        style={
+          styles.detailItemLabel
+        }
+      >
+        {label}
+      </Text>
+
+      <Text
+        style={
+          styles.detailItemValue
+        }
+        numberOfLines={2}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+// ============================================================
+// FORM INPUT
+// ============================================================
 
 function FormInput({
   label,
   value,
   onChangeText,
-  placeholder,
   keyboardType,
 }: {
   label: string;
@@ -1524,15 +1635,12 @@ function FormInput({
   onChangeText: (
     value: string
   ) => void;
-  placeholder: string;
-  keyboardType?:
-    | 'default'
-    | 'numeric';
+  keyboardType?: any;
 }) {
   return (
     <View
       style={
-        styles.formGroup
+        styles.formInputGroup
       }
     >
       <Text
@@ -1544,309 +1652,515 @@ function FormInput({
       </Text>
 
       <TextInput
-        style={
-          styles.formInput
-        }
         value={value}
         onChangeText={
           onChangeText
         }
-        placeholder={
-          placeholder
-        }
-        placeholderTextColor="#555967"
         keyboardType={
-          keyboardType ||
-          'default'
+          keyboardType
         }
-        autoCapitalize="none"
-        autoCorrect={false}
+        placeholderTextColor="#555862"
+        style={
+          styles.formInput
+        }
       />
     </View>
   );
 }
 
-/* =====================================================
-   SPACE BACKGROUND
-===================================================== */
+// ============================================================
+// SPACE BACKGROUND
+// ============================================================
 
 function SpaceBackground() {
   const stars = [
-    { x: 0.05, y: 0.10, size: 2 },
-    { x: 0.12, y: 0.22, size: 1 },
-    { x: 0.20, y: 0.07, size: 2 },
-    { x: 0.28, y: 0.16, size: 1 },
-    { x: 0.36, y: 0.08, size: 2 },
-    { x: 0.45, y: 0.20, size: 1 },
-    { x: 0.55, y: 0.09, size: 2 },
-    { x: 0.64, y: 0.18, size: 1 },
-    { x: 0.73, y: 0.07, size: 2 },
-    { x: 0.84, y: 0.16, size: 1 },
-    { x: 0.94, y: 0.08, size: 2 },
-
-    { x: 0.06, y: 0.45, size: 1 },
-    { x: 0.18, y: 0.56, size: 2 },
-    { x: 0.31, y: 0.43, size: 1 },
-    { x: 0.68, y: 0.48, size: 2 },
-    { x: 0.87, y: 0.56, size: 1 },
-
-    { x: 0.08, y: 0.78, size: 2 },
-    { x: 0.22, y: 0.90, size: 1 },
-    { x: 0.39, y: 0.78, size: 2 },
-    { x: 0.57, y: 0.88, size: 1 },
-    { x: 0.76, y: 0.76, size: 2 },
-    { x: 0.92, y: 0.90, size: 1 },
-  ];
-
-  const meteors = [
-    {
-      x: width * 0.90,
-      y: height * 0.08,
-    },
-    {
-      x: width * 0.72,
-      y: height * 0.15,
-    },
-    {
-      x: width * 0.45,
-      y: height * 0.05,
-    },
-    {
-      x: width * 0.95,
-      y: height * 0.35,
-    },
-    {
-      x: width * 0.65,
-      y: height * 0.28,
-    },
+    { left: '8%', top: '10%' },
+    { left: '22%', top: '17%' },
+    { left: '38%', top: '8%' },
+    { left: '55%', top: '14%' },
+    { left: '72%', top: '9%' },
+    { left: '88%', top: '20%' },
+    { left: '13%', top: '38%' },
+    { left: '30%', top: '48%' },
+    { left: '78%', top: '42%' },
+    { left: '92%', top: '58%' },
+    { left: '18%', top: '72%' },
+    { left: '50%', top: '82%' },
+    { left: '84%', top: '78%' },
   ];
 
   return (
     <View
       pointerEvents="none"
       style={
-        StyleSheet.absoluteFill
+        StyleSheet.absoluteFillObject
       }
     >
       <View
         style={
-          styles.spaceBase
+          styles.spaceGlow
         }
       />
 
       <View
-        style={[
-          styles.spaceGlow,
-          styles.spaceGlowBlue,
-        ]}
-      />
-
-      <View
-        style={[
-          styles.spaceGlow,
-          styles.spaceGlowPurple,
-        ]}
+        style={
+          styles.spaceGlowPurple
+        }
       />
 
       {stars.map(
         (star, index) => (
           <View
-            key={`star-${index}`}
+            key={index}
             style={[
-              styles.star,
+              styles.spaceStar,
               {
                 left:
-                  width *
-                  star.x,
-                top:
-                  height *
-                  star.y,
-                width:
-                  star.size,
-                height:
-                  star.size,
-                borderRadius:
-                  star.size /
-                  2,
+                  star.left,
+                top: star.top,
               },
             ]}
           />
         )
       )}
 
-      {meteors.map(
-        (meteor, index) => (
-          <View
-            key={`meteor-${index}`}
-            style={[
-              styles.thinMeteor,
-              {
-                left:
-                  meteor.x,
-                top:
-                  meteor.y,
-              },
-            ]}
-          >
-            <View
-              style={
-                styles.meteorLong
-              }
-            />
-
-            <View
-              style={
-                styles.meteorMid
-              }
-            />
-
-            <View
-              style={
-                styles.meteorBright
-              }
-            />
-
-            <View
-              style={
-                styles.meteorPoint
-              }
-            />
-          </View>
-        )
-      )}
+      <View
+        style={[
+          styles.spaceMeteor,
+          {
+            left:
+              SCREEN_WIDTH *
+              0.78,
+            top:
+              SCREEN_HEIGHT *
+              0.17,
+          },
+        ]}
+      >
+        <View
+          style={
+            styles.spaceMeteorLong
+          }
+        />
+        <View
+          style={
+            styles.spaceMeteorShort
+          }
+        />
+        <View
+          style={
+            styles.spaceMeteorPoint
+          }
+        />
+      </View>
 
       <View
-        style={
-          styles.bottomGlow
-        }
-      />
+        style={[
+          styles.spaceMeteor,
+          {
+            left:
+              SCREEN_WIDTH *
+              0.22,
+            top:
+              SCREEN_HEIGHT *
+              0.32,
+          },
+        ]}
+      >
+        <View
+          style={
+            styles.spaceMeteorLong
+          }
+        />
+        <View
+          style={
+            styles.spaceMeteorShort
+          }
+        />
+        <View
+          style={
+            styles.spaceMeteorPoint
+          }
+        />
+      </View>
     </View>
   );
 }
 
-/* =====================================================
-   STYLES
-===================================================== */
+// ============================================================
+// STYLES
+// ============================================================
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#030408',
+    backgroundColor: '#050507',
+    overflow: 'hidden',
   },
 
-  scroll: {
-    flex: 1,
-  },
-
-  content: {
-    width: '100%',
-    maxWidth: 1320,
-    alignSelf: 'center',
+  scrollContent: {
+    paddingTop: 35,
+    paddingBottom: 100,
     paddingHorizontal:
-      width < 600 ? 14 : 28,
-    paddingTop:
-      width < 600 ? 28 : 38,
-    paddingBottom: 110,
+      SCREEN_WIDTH < 500 ? 12 : 28,
   },
 
-  /* =========================
-     BACKGROUND
-  ========================== */
+  // ==========================================================
+  // HEADER
+  // ==========================================================
 
-  spaceBase: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#030408',
+  header: {
+    flexDirection: 'row',
+    justifyContent:
+      'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
   },
 
-  spaceGlow: {
-    position: 'absolute',
-    width: 430,
-    height: 430,
-    borderRadius: 215,
+  smallTitle: {
+    color: '#777B85',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 4,
   },
 
-  spaceGlowBlue: {
-    left: -170,
-    top: height * 0.05,
+  headerTitle: {
+    color: '#FFFFFF',
+    fontSize:
+      SCREEN_WIDTH < 500
+        ? 27
+        : 34,
+    fontWeight: '800',
+    marginTop: 3,
+  },
+
+  headerSubtitle: {
+    color: '#666A73',
+    fontSize: 12,
+    marginTop: 4,
+  },
+
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     backgroundColor:
-      'rgba(35,70,180,0.10)',
-    shadowColor: '#315CFF',
-    shadowOpacity: 0.35,
-    shadowRadius: 100,
+      'rgba(91,78,255,0.22)',
+    borderWidth: 1,
+    borderColor:
+      'rgba(110,100,255,0.7)',
+    borderRadius: 12,
+    paddingHorizontal: 15,
+    paddingVertical: 11,
   },
 
-  spaceGlowPurple: {
-    right: -170,
-    bottom: height * 0.05,
+  addButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  // ==========================================================
+  // SEARCH
+  // ==========================================================
+
+  searchRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 18,
+  },
+
+  searchBox: {
+    flex: 1,
+    height: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 13,
     backgroundColor:
-      'rgba(95,45,180,0.10)',
-    shadowColor: '#7B4DFF',
-    shadowOpacity: 0.35,
-    shadowRadius: 100,
+      'rgba(8,8,15,0.75)',
+    borderWidth: 1,
+    borderColor:
+      'rgba(255,255,255,0.08)',
+    borderRadius: 12,
   },
 
-  star: {
-    position: 'absolute',
-    backgroundColor: '#FFFFFF',
-    opacity: 0.55,
+  searchInput: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontSize: 13,
+    marginLeft: 8,
+    outlineStyle: 'none',
   },
 
-  thinMeteor: {
-    position: 'absolute',
-    width: 4,
-    height: 4,
-  },
-
-  meteorLong: {
-    position: 'absolute',
-    right: 1,
-    top: 2,
-    width: 120,
-    height: 1,
+  countBox: {
+    width:
+      SCREEN_WIDTH < 500
+        ? 72
+        : 90,
+    height: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor:
-      'rgba(255,215,130,0.15)',
+      'rgba(8,8,15,0.75)',
+    borderWidth: 1,
+    borderColor:
+      'rgba(255,255,255,0.08)',
   },
 
-  meteorMid: {
-    position: 'absolute',
-    right: 1,
-    top: 2,
-    width: 75,
-    height: 1,
+  countLabel: {
+    color: '#555862',
+    fontSize: 7,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+  },
+
+  countNumber: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+    marginTop: 1,
+  },
+
+  // ==========================================================
+  // GRID
+  // ==========================================================
+
+  productGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent:
+      'space-between',
+    gap: 12,
+  },
+
+  productCard: {
+    width:
+      SCREEN_WIDTH < 500
+        ? '48.2%'
+        : '31.8%',
     backgroundColor:
-      'rgba(255,230,175,0.40)',
+      'rgba(8,8,15,0.78)',
+    borderWidth: 1,
+    borderColor:
+      'rgba(255,255,255,0.08)',
+    borderRadius: 15,
+    padding: 10,
+    marginBottom: 2,
   },
 
-  meteorBright: {
-    position: 'absolute',
-    right: 1,
-    top: 2,
-    width: 32,
-    height: 1,
-    backgroundColor: '#FFF8E8',
-  },
-
-  meteorPoint: {
-    position: 'absolute',
-    width: 3,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: '#FFFFFF',
-  },
-
-  bottomGlow: {
-    position: 'absolute',
-    width: width * 1.2,
-    height: 180,
-    borderRadius: 200,
-    bottom: -120,
+  imageBox: {
+    width: '100%',
+    height:
+      SCREEN_WIDTH < 500
+        ? 115
+        : 160,
+    borderRadius: 11,
     backgroundColor:
-      'rgba(60,45,150,0.08)',
+      'rgba(255,255,255,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    marginBottom: 10,
   },
 
-  /* =========================
-     LOADING
-  ========================== */
+  productImage: {
+    width: '92%',
+    height: '92%',
+  },
+
+  productName: {
+    color: '#FFFFFF',
+    fontSize:
+      SCREEN_WIDTH < 500
+        ? 12
+        : 14,
+    fontWeight: '700',
+    lineHeight:
+      SCREEN_WIDTH < 500
+        ? 17
+        : 20,
+    minHeight:
+      SCREEN_WIDTH < 500
+        ? 34
+        : 40,
+  },
+
+  productBrand: {
+    color: '#777B85',
+    fontSize: 9,
+    marginTop: 4,
+  },
+
+  priceText: {
+    color: '#B0A6FF',
+    fontSize:
+      SCREEN_WIDTH < 500
+        ? 15
+        : 18,
+    fontWeight: '800',
+    marginTop: 7,
+  },
+
+  stockRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent:
+      'space-between',
+    marginTop: 8,
+  },
+
+  stockLabel: {
+    color: '#555862',
+    fontSize: 9,
+  },
+
+  stockBadge: {
+    minWidth: 31,
+    height: 23,
+    paddingHorizontal: 7,
+    borderRadius: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor:
+      'rgba(0,180,100,0.12)',
+    borderWidth: 1,
+    borderColor:
+      'rgba(0,220,140,0.2)',
+  },
+
+  stockEmpty: {
+    backgroundColor:
+      'rgba(255,60,90,0.12)',
+    borderColor:
+      'rgba(255,60,90,0.25)',
+  },
+
+  stockText: {
+    color: '#62DDA5',
+    fontSize: 9,
+    fontWeight: '700',
+  },
+
+  // ==========================================================
+  // BUY
+  // ==========================================================
+
+  buyButton: {
+    height: 34,
+    marginTop: 9,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    backgroundColor: '#5D51F5',
+  },
+
+  buyButtonDisabled: {
+    opacity: 0.35,
+  },
+
+  buyButtonText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+
+  // ==========================================================
+  // ADMIN
+  // ==========================================================
+
+  adminButtons: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 9,
+  },
+
+  editButton: {
+    flex: 1,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 3,
+    backgroundColor:
+      'rgba(91,78,255,0.2)',
+    borderWidth: 1,
+    borderColor:
+      'rgba(110,100,255,0.45)',
+  },
+
+  deleteButton: {
+    flex: 1,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 3,
+    backgroundColor:
+      'rgba(255,50,80,0.08)',
+    borderWidth: 1,
+    borderColor:
+      'rgba(255,70,90,0.25)',
+  },
+
+  buttonText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '700',
+  },
+
+  deleteText: {
+    color: '#FF6B81',
+    fontSize: 9,
+    fontWeight: '700',
+  },
+
+  // ==========================================================
+  // VIEW HINT
+  // ==========================================================
+
+  viewHint: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 7,
+  },
+
+  viewHintText: {
+    color: '#555862',
+    fontSize: 8,
+  },
+
+  // ==========================================================
+  // EMPTY
+  // ==========================================================
+
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 80,
+  },
+
+  emptyTitle: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '700',
+    marginTop: 15,
+  },
+
+  emptyText: {
+    color: '#555862',
+    fontSize: 12,
+    marginTop: 5,
+  },
+
+  // ==========================================================
+  // LOADING
+  // ==========================================================
 
   loadingContainer: {
     flex: 1,
@@ -1855,827 +2169,443 @@ const styles = StyleSheet.create({
   },
 
   loadingText: {
-    color: '#777D91',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 2,
-    marginTop: 15,
-  },
-
-  /* =========================
-     HEADER
-  ========================== */
-
-  header: {
-    flexDirection: 'row',
-    justifyContent:
-      'space-between',
-    alignItems: 'flex-end',
-    marginBottom: 24,
-  },
-
-  smallTitle: {
-    color: '#7168FF',
-    fontSize: 9,
-    fontWeight: '900',
-    letterSpacing: 4,
-    marginBottom: 5,
-  },
-
-  pageTitle: {
-    color: '#FFFFFF',
-    fontSize:
-      width < 600 ? 30 : 36,
-    fontWeight: '900',
-    letterSpacing: -1,
-  },
-
-  pageSubtitle: {
-    color: '#626878',
-    fontSize: 11,
-    marginTop: 4,
-  },
-
-  addButton: {
-    backgroundColor:
-      'rgba(99,91,255,0.18)',
-    borderWidth: 1,
-    borderColor:
-      'rgba(120,110,255,0.55)',
-    paddingHorizontal: 18,
-    paddingVertical: 11,
-    borderRadius: 12,
-  },
-
-  addButtonText: {
-    color: '#FFFFFF',
+    color: '#777B85',
     fontSize: 12,
-    fontWeight: '800',
+    marginTop: 12,
   },
 
-  /* =========================
-     SEARCH
-  ========================== */
-
-  searchBox: {
-    height: 54,
-    flexDirection: 'row',
-    alignItems: 'center',
-
-    backgroundColor:
-      'rgba(8,10,18,0.82)',
-
-    borderWidth: 1,
-    borderColor:
-      'rgba(255,255,255,0.07)',
-
-    borderRadius: 15,
-
-    paddingLeft: 16,
-    paddingRight: 8,
-
-    marginBottom: 16,
-  },
-
-  searchIcon: {
-    color: '#626878',
-    fontSize: 24,
-    marginRight: 8,
-  },
-
-  searchInput: {
-    flex: 1,
-    color: '#FFFFFF',
-    fontSize: 13,
-    outlineStyle: 'none',
-  },
-
-  productCount: {
-    height: 38,
-    minWidth: 90,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-
-    backgroundColor:
-      'rgba(255,255,255,0.025)',
-
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  productCountLabel: {
-    color: '#555967',
-    fontSize: 7,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
-
-  productCountNumber: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '900',
-    marginTop: 1,
-  },
-
-  /* =========================
-     PRODUCT CARD
-  ========================== */
-
-  productCard: {
-    minHeight: 114,
-
-    flexDirection: 'row',
-    alignItems: 'center',
-
-    backgroundColor:
-      'rgba(8,10,18,0.82)',
-
-    borderWidth: 1,
-    borderColor:
-      'rgba(255,255,255,0.07)',
-
-    borderRadius: 17,
-
-    padding: 12,
-    marginBottom: 10,
-  },
-
-  imageBox: {
-    width:
-      width < 600 ? 86 : 90,
-    height:
-      width < 600 ? 86 : 90,
-
-    borderRadius: 12,
-
-    backgroundColor:
-      '#111217',
-
-    alignItems: 'center',
-    justifyContent: 'center',
-
-    overflow: 'hidden',
-  },
-
-  productImage: {
-    width: '100%',
-    height: '100%',
-  },
-
-  noImage: {
-    color: '#4E5260',
-    fontSize: 8,
-    fontWeight: '800',
-  },
-
-  productInfo: {
-    flex: 1,
-    paddingHorizontal: 14,
-    minWidth: 0,
-  },
-
-  productName: {
-    color: '#E8E9EF',
-    fontSize:
-      width < 600 ? 13 : 15,
-    fontWeight: '800',
-    lineHeight: 19,
-  },
-
-  productBrand: {
-    color: '#5F6472',
-    fontSize: 9,
-    fontWeight: '600',
-    marginTop: 3,
-    textTransform: 'uppercase',
-  },
-
-  tags: {
-    flexDirection: 'row',
-    marginTop: 7,
-    gap: 5,
-  },
-
-  categoryTag: {
-    backgroundColor:
-      'rgba(99,91,255,0.10)',
-    borderRadius: 6,
-    paddingHorizontal: 7,
-    paddingVertical: 4,
-  },
-
-  categoryTagText: {
-    color: '#8077FF',
-    fontSize: 8,
-    fontWeight: '700',
-  },
-
-  vramTag: {
-    backgroundColor:
-      'rgba(255,255,255,0.035)',
-    borderRadius: 6,
-    paddingHorizontal: 7,
-    paddingVertical: 4,
-  },
-
-  vramTagText: {
-    color: '#727684',
-    fontSize: 8,
-    fontWeight: '700',
-  },
-
-  serialText: {
-    color: '#4F5360',
-    fontSize: 8,
-    marginTop: 6,
-  },
-
-  /* =========================
-     PRICE
-  ========================== */
-
-  priceSection: {
-    width:
-      width < 600 ? 100 : 120,
-    alignItems: 'flex-start',
-  },
-
-  priceLabel: {
-    color: '#555967',
-    fontSize: 7,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
-
-  priceText: {
-    color: '#E6E7EC',
-    fontSize:
-      width < 600 ? 14 : 16,
-    fontWeight: '900',
-    marginTop: 4,
-  },
-
-  costLabel: {
-    color: '#555967',
-    fontSize: 7,
-    fontWeight: '800',
-    letterSpacing: 1,
-    marginTop: 7,
-  },
-
-  costText: {
-    color: '#777D91',
-    fontSize: 10,
-    marginTop: 2,
-  },
-
-  /* =========================
-     STOCK
-  ========================== */
-
-  stockSection: {
-    width: 65,
-    alignItems: 'center',
-  },
-
-  stockLabel: {
-    color: '#555967',
-    fontSize: 7,
-    fontWeight: '800',
-    letterSpacing: 1,
-    marginBottom: 5,
-  },
-
-  stockBadge: {
-    minWidth: 38,
-    paddingHorizontal: 8,
-    paddingVertical: 7,
-    borderRadius: 8,
-
-    backgroundColor:
-      'rgba(34,197,94,0.08)',
-    borderWidth: 1,
-    borderColor:
-      'rgba(34,197,94,0.18)',
-
-    alignItems: 'center',
-  },
-
-  stockBadgeLow: {
-    backgroundColor:
-      'rgba(245,158,11,0.10)',
-    borderColor:
-      'rgba(245,158,11,0.25)',
-  },
-
-  stockBadgeEmpty: {
-    backgroundColor:
-      'rgba(244,63,94,0.10)',
-    borderColor:
-      'rgba(244,63,94,0.25)',
-  },
-
-  stockText: {
-    color: '#6DD69A',
-    fontSize: 11,
-    fontWeight: '900',
-  },
-
-  /* =========================
-     ACTION
-  ========================== */
-
-  actionSection: {
-    width:
-      width < 600 ? 90 : 100,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-
-  buyButton: {
-    width:
-      width < 600 ? 78 : 86,
-    height: 38,
-
-    borderRadius: 10,
-
-    backgroundColor: '#635BFF',
-
-    alignItems: 'center',
-    justifyContent: 'center',
-
-    flexDirection: 'row',
-
-    shadowColor: '#635BFF',
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-  },
-
-  buyButtonDisabled: {
-    opacity: 0.35,
-  },
-
-  cartIcon: {
-    fontSize: 12,
-    marginRight: 5,
-  },
-
-  buyButtonText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '900',
-  },
-
-  editButton: {
-    width: 82,
-    height: 34,
-    borderRadius: 9,
-
-    backgroundColor:
-      'rgba(99,91,255,0.15)',
-
-    borderWidth: 1,
-    borderColor:
-      'rgba(99,91,255,0.35)',
-
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  editButtonText: {
-    color: '#8C84FF',
-    fontSize: 10,
-    fontWeight: '800',
-  },
-
-  deleteButton: {
-    width: 82,
-    height: 34,
-    borderRadius: 9,
-
-    backgroundColor:
-      'rgba(244,63,94,0.08)',
-
-    borderWidth: 1,
-    borderColor:
-      'rgba(244,63,94,0.22)',
-
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  deleteButtonText: {
-    color: '#F36A82',
-    fontSize: 10,
-    fontWeight: '800',
-  },
-
-  /* =========================
-     EMPTY
-  ========================== */
-
-  emptyBox: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 80,
-  },
-
-  emptyIcon: {
-    fontSize: 40,
-    marginBottom: 15,
-  },
-
-  emptyTitle: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '800',
-  },
-
-  emptyText: {
-    color: '#626878',
-    fontSize: 11,
-    marginTop: 6,
-  },
-
-  /* =========================
-     FORM MODAL
-  ========================== */
+  // ==========================================================
+  // DETAIL MODAL
+  // ==========================================================
 
   modalOverlay: {
     flex: 1,
     backgroundColor:
       'rgba(0,0,0,0.78)',
-    justifyContent: 'center',
     alignItems: 'center',
-    padding: 18,
+    justifyContent: 'center',
+    padding: 16,
   },
 
-  formModal: {
+  detailModal: {
     width: '100%',
-    maxWidth: 520,
-    maxHeight: '90%',
-
-    backgroundColor: '#090B12',
-
-    borderRadius: 22,
-
+    maxWidth: 470,
+    maxHeight:
+      SCREEN_HEIGHT * 0.88,
+    backgroundColor: '#0D0D14',
+    borderRadius: 20,
     borderWidth: 1,
     borderColor:
-      'rgba(108,98,255,0.30)',
-
-    padding: 22,
-
-    shadowColor: '#6258FF',
-    shadowOpacity: 0.25,
-    shadowRadius: 30,
-    elevation: 15,
-  },
-
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent:
-      'space-between',
-    alignItems: 'center',
-    marginBottom: 22,
-  },
-
-  modalTitle: {
-    color: '#FFFFFF',
-    fontSize: 22,
-    fontWeight: '900',
-  },
-
-  modalSubtitle: {
-    color: '#626878',
-    fontSize: 10,
-    marginTop: 4,
+      'rgba(110,100,255,0.45)',
+    overflow: 'hidden',
   },
 
   closeButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
-
-    backgroundColor:
-      'rgba(255,255,255,0.05)',
-
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor:
+      'rgba(255,255,255,0.06)',
   },
 
-  closeButtonText: {
-    color: '#A0A4B0',
-    fontSize: 24,
-    lineHeight: 27,
+  detailContent: {
+    padding: 20,
+    paddingTop: 14,
   },
 
-  formGroup: {
-    marginBottom: 15,
+  detailImageBox: {
+    width: '100%',
+    height:
+      SCREEN_WIDTH < 500
+        ? 190
+        : 250,
+    borderRadius: 15,
+    backgroundColor:
+      'rgba(255,255,255,0.94)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
   },
 
-  formLabel: {
-    color: '#858A9A',
-    fontSize: 9,
+  detailImage: {
+    width: '92%',
+    height: '92%',
+  },
+
+  detailTitle: {
+    color: '#FFFFFF',
+    fontSize: 19,
     fontWeight: '800',
-    letterSpacing: 1.3,
-    marginBottom: 7,
+    marginTop: 18,
+    lineHeight: 25,
   },
 
-  formInput: {
-    height: 46,
+  detailBrand: {
+    color: '#777B85',
+    fontSize: 12,
+    marginTop: 4,
+  },
 
+  detailPrice: {
+    color: '#B0A6FF',
+    fontSize: 25,
+    fontWeight: '900',
+    marginTop: 12,
+  },
+
+  detailGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent:
+      'space-between',
+    marginTop: 18,
+  },
+
+  detailItem: {
+    width: '48%',
+    minHeight: 62,
     backgroundColor:
       'rgba(255,255,255,0.035)',
-
     borderWidth: 1,
     borderColor:
-      'rgba(255,255,255,0.08)',
-
+      'rgba(255,255,255,0.06)',
     borderRadius: 10,
-
-    color: '#FFFFFF',
-    fontSize: 13,
-
-    paddingHorizontal: 13,
-
-    outlineStyle: 'none',
-  },
-
-  previewBox: {
-    marginTop: 2,
-    marginBottom: 16,
-
-    backgroundColor:
-      'rgba(255,255,255,0.025)',
-
-    borderRadius: 12,
-
     padding: 10,
-
-    alignItems: 'center',
-  },
-
-  previewLabel: {
-    color: '#555967',
-    fontSize: 8,
-    fontWeight: '800',
-    letterSpacing: 1,
-    alignSelf: 'flex-start',
     marginBottom: 8,
   },
 
-  previewImage: {
-    width: 150,
-    height: 110,
+  detailItemLabel: {
+    color: '#555862',
+    fontSize: 8,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+
+  detailItemValue: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 6,
+  },
+
+  detailBuyButton: {
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#5D51F5',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    marginTop: 10,
+  },
+
+  detailBuyText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  detailAdminRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 10,
+  },
+
+  detailEditButton: {
+    flex: 1,
+    height: 46,
+    borderRadius: 11,
+    backgroundColor:
+      'rgba(91,78,255,0.22)',
+    borderWidth: 1,
+    borderColor:
+      'rgba(110,100,255,0.5)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+
+  detailDeleteButton: {
+    flex: 1,
+    height: 46,
+    borderRadius: 11,
+    backgroundColor:
+      'rgba(255,50,80,0.08)',
+    borderWidth: 1,
+    borderColor:
+      'rgba(255,70,90,0.25)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+
+  detailButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  detailDeleteText: {
+    color: '#FF6B81',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  // ==========================================================
+  // FORM MODAL
+  // ==========================================================
+
+  formModal: {
+    width: '100%',
+    maxWidth: 560,
+    maxHeight:
+      SCREEN_HEIGHT * 0.9,
+    backgroundColor: '#0D0D14',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor:
+      'rgba(110,100,255,0.45)',
+    overflow: 'hidden',
+  },
+
+  formHeader: {
+    flexDirection: 'row',
+    justifyContent:
+      'space-between',
+    alignItems: 'center',
+    padding: 18,
+    paddingBottom: 8,
+  },
+
+  formTitle: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '800',
+  },
+
+  formSubtitle: {
+    color: '#666A73',
+    fontSize: 10,
+    marginTop: 3,
+  },
+
+  formContent: {
+    padding: 18,
+    paddingTop: 8,
+    paddingBottom: 25,
+  },
+
+  formInputGroup: {
+    marginBottom: 12,
+  },
+
+  formLabel: {
+    color: '#777B85',
+    fontSize: 9,
+    fontWeight: '700',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+
+  formInput: {
+    height: 43,
+    backgroundColor:
+      'rgba(255,255,255,0.045)',
+    borderWidth: 1,
+    borderColor:
+      'rgba(255,255,255,0.09)',
+    borderRadius: 9,
+    paddingHorizontal: 11,
+    color: '#FFFFFF',
+    fontSize: 12,
+    outlineStyle: 'none',
+  },
+
+  formTwoColumns: {
+    flexDirection: 'row',
+    justifyContent:
+      'space-between',
+    gap: 10,
+  },
+
+  formHalf: {
+    flex: 1,
   },
 
   saveButton: {
     height: 48,
     borderRadius: 11,
-
-    backgroundColor: '#635BFF',
-
+    backgroundColor: '#5D51F5',
     alignItems: 'center',
     justifyContent: 'center',
-
-    marginTop: 5,
-
-    shadowColor: '#635BFF',
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
+    flexDirection: 'row',
+    gap: 7,
+    marginTop: 7,
   },
 
   saveButtonText: {
     color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: 1.3,
-  },
-
-  cancelButton: {
-    height: 45,
-    borderRadius: 11,
-
-    alignItems: 'center',
-    justifyContent: 'center',
-
-    marginTop: 8,
-  },
-
-  cancelButtonText: {
-    color: '#686D7B',
-    fontSize: 10,
+    fontSize: 13,
     fontWeight: '800',
   },
 
-  /* =========================
-     ALERT
-  ========================== */
+  // ==========================================================
+  // ALERT
+  // ==========================================================
 
   alertOverlay: {
     flex: 1,
-
     backgroundColor:
       'rgba(0,0,0,0.72)',
-
     alignItems: 'center',
     justifyContent: 'center',
-
-    padding: 20,
-
-    zIndex: 9999,
+    padding: 25,
   },
 
   alertCard: {
-    width: '88%',
-    maxWidth: 390,
-
-    backgroundColor: '#0A0B12',
-
-    borderRadius: 22,
-
-    paddingHorizontal: 24,
-    paddingVertical: 26,
-
-    alignItems: 'center',
-
+    width: '100%',
+    maxWidth: 350,
+    backgroundColor: '#111119',
+    borderRadius: 18,
     borderWidth: 1,
     borderColor:
-      'rgba(108,98,255,0.35)',
-
-    shadowColor: '#6258FF',
-    shadowOpacity: 0.45,
-    shadowRadius: 30,
-    shadowOffset: {
-      width: 0,
-      height: 12,
-    },
-
-    elevation: 15,
+      'rgba(110,100,255,0.45)',
+    padding: 22,
+    alignItems: 'center',
   },
 
   alertIcon: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: '#5D51F5',
     alignItems: 'center',
     justifyContent: 'center',
-
-    marginBottom: 16,
-
-    borderWidth: 1,
-  },
-
-  alertIconSuccess: {
-    backgroundColor:
-      'rgba(99,91,255,0.18)',
-    borderColor:
-      'rgba(125,115,255,0.55)',
-
-    shadowColor: '#635BFF',
-    shadowOpacity: 0.6,
-    shadowRadius: 15,
-  },
-
-  alertIconError: {
-    backgroundColor:
-      'rgba(244,63,94,0.15)',
-    borderColor:
-      'rgba(244,63,94,0.5)',
-
-    shadowColor: '#F43F5E',
-    shadowOpacity: 0.5,
-    shadowRadius: 15,
-  },
-
-  alertIconWarning: {
-    backgroundColor:
-      'rgba(245,158,11,0.13)',
-    borderColor:
-      'rgba(245,158,11,0.45)',
-
-    shadowColor: '#F59E0B',
-    shadowOpacity: 0.4,
-    shadowRadius: 15,
-  },
-
-  alertIconText: {
-    color: '#FFFFFF',
-    fontSize: 27,
-    fontWeight: '900',
+    marginBottom: 12,
   },
 
   alertTitle: {
     color: '#FFFFFF',
-    fontSize: 19,
-    fontWeight: '900',
+    fontSize: 18,
+    fontWeight: '800',
     textAlign: 'center',
-    marginBottom: 10,
   },
 
   alertMessage: {
-    color: '#8D91A0',
-    fontSize: 13,
-    lineHeight: 20,
+    color: '#999CA6',
+    fontSize: 12,
+    lineHeight: 19,
     textAlign: 'center',
-    marginBottom: 22,
-  },
-
-  alertProductName: {
-    color: '#FFFFFF',
-    fontWeight: '800',
+    marginTop: 8,
   },
 
   alertButton: {
     width: '100%',
-    height: 46,
-
-    borderRadius: 12,
-
+    height: 42,
+    borderRadius: 10,
+    backgroundColor: '#5D51F5',
     alignItems: 'center',
     justifyContent: 'center',
-
-    backgroundColor: '#635BFF',
-
-    borderWidth: 1,
-    borderColor:
-      'rgba(150,140,255,0.6)',
-
-    shadowColor: '#635BFF',
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-  },
-
-  alertButtonError: {
-    backgroundColor: '#D93656',
-    borderColor:
-      'rgba(255,100,125,0.5)',
-    shadowColor: '#F43F5E',
-  },
-
-  alertButtonWarning: {
-    backgroundColor: '#B7791F',
-    borderColor:
-      'rgba(255,190,70,0.4)',
-    shadowColor: '#F59E0B',
+    marginTop: 18,
   },
 
   alertButtonText: {
     color: '#FFFFFF',
     fontSize: 13,
-    fontWeight: '900',
-    letterSpacing: 1,
+    fontWeight: '700',
   },
 
-  /* =========================
-     DELETE CONFIRM
-  ========================== */
+  // ==========================================================
+  // SPACE BACKGROUND
+  // ==========================================================
 
-  confirmRow: {
-    width: '100%',
-    flexDirection: 'row',
-    gap: 10,
-  },
-
-  confirmCancel: {
-    flex: 1,
-    height: 45,
-    borderRadius: 11,
-
+  spaceGlow: {
+    position: 'absolute',
+    width: 650,
+    height: 650,
+    borderRadius: 325,
+    left: '50%',
+    top: '42%',
+    marginLeft: -325,
+    marginTop: -325,
     backgroundColor:
-      'rgba(255,255,255,0.05)',
-
-    alignItems: 'center',
-    justifyContent: 'center',
+      'rgba(55,45,150,0.045)',
+    shadowColor: '#675BFF',
+    shadowOpacity: 0.15,
+    shadowRadius: 100,
   },
 
-  confirmCancelText: {
-    color: '#858A9A',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-
-  confirmDelete: {
-    flex: 1,
-    height: 45,
-    borderRadius: 11,
-
+  spaceGlowPurple: {
+    position: 'absolute',
+    width: 430,
+    height: 430,
+    borderRadius: 215,
+    left: '50%',
+    top: '40%',
+    marginLeft: -215,
+    marginTop: -215,
     backgroundColor:
-      '#D93656',
-
-    alignItems: 'center',
-    justifyContent: 'center',
-
-    borderWidth: 1,
-    borderColor:
-      'rgba(255,100,125,0.4)',
+      'rgba(95,70,255,0.025)',
+    shadowColor: '#675BFF',
+    shadowOpacity: 0.2,
+    shadowRadius: 80,
   },
 
-  confirmDeleteText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '900',
+  spaceStar: {
+    position: 'absolute',
+    width: 2,
+    height: 2,
+    borderRadius: 2,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#FFD66B',
+    shadowOpacity: 0.8,
+    shadowRadius: 5,
+  },
+
+  spaceMeteor: {
+    position: 'absolute',
+    width: 4,
+    height: 4,
+    transform: [
+      {
+        rotate: '-45deg',
+      },
+    ],
+  },
+
+  spaceMeteorLong: {
+    position: 'absolute',
+    right: 0,
+    top: 2,
+    width: 90,
+    height: 1,
+    backgroundColor:
+      'rgba(255,215,130,0.13)',
+  },
+
+  spaceMeteorShort: {
+    position: 'absolute',
+    right: 0,
+    top: 2,
+    width: 35,
+    height: 1,
+    backgroundColor:
+      'rgba(255,240,190,0.5)',
+  },
+
+  spaceMeteorPoint: {
+    position: 'absolute',
+    width: 3,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#FFFFFF',
+    shadowOpacity: 1,
+    shadowRadius: 5,
   },
 });
