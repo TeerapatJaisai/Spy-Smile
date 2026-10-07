@@ -144,7 +144,9 @@ export default function Dashboard() {
     return (
       <View style={styles.loadingContainer}>
         <View style={styles.loadingLogo}>
-          <Text style={styles.loadingLogoText}>IT</Text>
+          <Text style={styles.loadingLogoText}>
+            IT
+          </Text>
         </View>
 
         <ActivityIndicator
@@ -183,7 +185,9 @@ export default function Dashboard() {
 
         <View style={styles.adminBadge}>
           <View style={styles.adminCircle}>
-            <Text style={styles.adminIcon}>♛</Text>
+            <Text style={styles.adminIcon}>
+              ♛
+            </Text>
           </View>
 
           <View>
@@ -208,7 +212,9 @@ export default function Dashboard() {
           style={styles.refreshButton}
           onPress={loadDashboard}
         >
-          <Text style={styles.refreshIcon}>↻</Text>
+          <Text style={styles.refreshIcon}>
+            ↻
+          </Text>
 
           <Text style={styles.refreshText}>
             Refresh
@@ -219,7 +225,7 @@ export default function Dashboard() {
       {/* KPI CARDS */}
       <View style={styles.kpiGrid}>
 
-        {/* Orders */}
+        {/* ORDERS */}
         <View style={styles.kpiCard}>
           <View style={styles.kpiTop}>
             <View
@@ -228,7 +234,9 @@ export default function Dashboard() {
                 styles.blueIcon,
               ]}
             >
-              <Text style={styles.iconText}>▣</Text>
+              <Text style={styles.iconText}>
+                ▣
+              </Text>
             </View>
 
             <Text style={styles.kpiPeriod}>
@@ -249,7 +257,7 @@ export default function Dashboard() {
           </Text>
         </View>
 
-        {/* Today Revenue */}
+        {/* TODAY REVENUE */}
         <View style={styles.kpiCard}>
           <View style={styles.kpiTop}>
             <View
@@ -258,7 +266,9 @@ export default function Dashboard() {
                 styles.greenIcon,
               ]}
             >
-              <Text style={styles.iconText}>฿</Text>
+              <Text style={styles.iconText}>
+                ฿
+              </Text>
             </View>
 
             <Text style={styles.kpiPeriod}>
@@ -279,7 +289,7 @@ export default function Dashboard() {
           </Text>
         </View>
 
-        {/* Month Revenue */}
+        {/* MONTH REVENUE */}
         <View style={styles.kpiCard}>
           <View style={styles.kpiTop}>
             <View
@@ -288,7 +298,9 @@ export default function Dashboard() {
                 styles.purpleIcon,
               ]}
             >
-              <Text style={styles.iconText}>↗</Text>
+              <Text style={styles.iconText}>
+                ↗
+              </Text>
             </View>
 
             <Text style={styles.kpiPeriod}>
@@ -309,7 +321,7 @@ export default function Dashboard() {
           </Text>
         </View>
 
-        {/* Profit */}
+        {/* PROFIT */}
         <View style={styles.kpiCard}>
           <View style={styles.kpiTop}>
             <View
@@ -318,7 +330,9 @@ export default function Dashboard() {
                 styles.goldIcon,
               ]}
             >
-              <Text style={styles.iconText}>◆</Text>
+              <Text style={styles.iconText}>
+                ◆
+              </Text>
             </View>
 
             <Text style={styles.kpiPeriod}>
@@ -387,20 +401,26 @@ export default function Dashboard() {
             </View>
           ) : (
             <View style={styles.chartContainer}>
+
               {/* Y AXIS */}
               <View style={styles.yAxis}>
                 <Text style={styles.axisText}>
-                  ฿{Math.round(getMaxSales()).toLocaleString('th-TH')}
+                  ฿
+                  {Math.round(
+                    getMaxSales()
+                  ).toLocaleString('th-TH')}
                 </Text>
 
                 <Text style={styles.axisText}>
-                  ฿{Math.round(
+                  ฿
+                  {Math.round(
                     getMaxSales() * 0.66
                   ).toLocaleString('th-TH')}
                 </Text>
 
                 <Text style={styles.axisText}>
-                  ฿{Math.round(
+                  ฿
+                  {Math.round(
                     getMaxSales() * 0.33
                   ).toLocaleString('th-TH')}
                 </Text>
@@ -411,6 +431,7 @@ export default function Dashboard() {
               </View>
 
               <View style={styles.chartArea}>
+
                 {/* GRID */}
                 <View
                   style={[
@@ -449,7 +470,8 @@ export default function Dashboard() {
                       );
 
                       const height =
-                        (value / getMaxSales()) *
+                        (value /
+                          getMaxSales()) *
                         145;
 
                       return (
@@ -468,7 +490,9 @@ export default function Dashboard() {
                           </Text>
 
                           <View
-                            style={styles.barWrapper}
+                            style={
+                              styles.barWrapper
+                            }
                           >
                             <View
                               style={[
@@ -501,7 +525,7 @@ export default function Dashboard() {
           )}
         </View>
 
-        {/* STOCK */}
+        {/* STOCK ALERT */}
         <View style={styles.stockCard}>
           <View style={styles.cardHeader}>
             <View>
@@ -547,14 +571,19 @@ export default function Dashboard() {
                     style={styles.stockRow}
                   >
                     <View
-                      style={styles.productAvatar}
+                      style={
+                        styles.productAvatar
+                      }
                     >
                       <Text
-                        style={styles.productAvatarText}
+                        style={
+                          styles.productAvatarText
+                        }
                       >
                         {product.name
                           ?.charAt(0)
-                          ?.toUpperCase() || 'P'}
+                          ?.toUpperCase() ||
+                          'P'}
                       </Text>
                     </View>
 
@@ -569,7 +598,9 @@ export default function Dashboard() {
                       </Text>
 
                       <Text
-                        style={styles.productBrand}
+                        style={
+                          styles.productBrand
+                        }
                       >
                         {product.brand ||
                           'IT Product'}
@@ -592,8 +623,7 @@ export default function Dashboard() {
                           styles.stockNumber,
                           {
                             color:
-                              product.stock <=
-                              0
+                              product.stock <= 0
                                 ? '#DC2626'
                                 : '#EA580C',
                           },

@@ -1,22 +1,14 @@
 import { Tabs } from 'expo-router';
-import {
-  Platform,
-  StyleSheet,
-  View,
-} from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Platform } from 'react-native';
 import { useEffect, useState } from 'react';
-import {
-  MaterialCommunityIcons,
-} from '@expo/vector-icons';
 
 export default function TabLayout() {
-  const [isAdmin, setIsAdmin] =
-    useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     if (Platform.OS === 'web') {
-      const role =
-        window.localStorage.getItem('role');
+      const role = window.localStorage.getItem('role');
 
       setIsAdmin(
         role?.trim().toLowerCase() === 'admin'
@@ -29,72 +21,37 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
 
-        // ============================================
-        // BOTTOM BAR
-        // ============================================
+        // ======================================
+        // สีเดิม
+        // ======================================
+        tabBarActiveTintColor: 'rgb(102, 192, 244)',
+        tabBarInactiveTintColor: 'rgb(119, 185, 240)',
 
         tabBarStyle: {
-          backgroundColor: '#050507',
-
+          backgroundColor: '#101314',
+          borderTopColor: '#2a466d',
           borderTopWidth: 1,
 
-          borderTopColor:
-            'rgba(255,255,255,0.08)',
+          height: 72,
 
-          height:
-            Platform.OS === 'ios'
-              ? 78
-              : 68,
-
-          paddingTop: 6,
-
-          paddingBottom:
-            Platform.OS === 'ios'
-              ? 18
-              : 7,
-
-          paddingHorizontal: 5,
+          paddingTop: 5,
+          paddingBottom: 8,
         },
-
-        // ============================================
-        // COLORS
-        // ============================================
-
-        tabBarActiveTintColor:
-          '#FFFFFF',
-
-        tabBarInactiveTintColor:
-          '#666A73',
-
-        // ============================================
-        // LABEL
-        // ============================================
 
         tabBarLabelStyle: {
-          fontSize: 9,
-          fontWeight: '600',
-          marginTop: 2,
+          fontSize: 10,
+          fontWeight: '700',
         },
-
-        // ============================================
-        // FULL WIDTH
-        // ============================================
 
         tabBarItemStyle: {
           flex: 1,
-          paddingHorizontal: 0,
-          marginHorizontal: 0,
-        },
-
-        tabBarIconStyle: {
-          marginBottom: 0,
         },
       }}
     >
 
-      {/* ================================================== */}
-      {/* HOME */}
-      {/* ================================================== */}
+      {/* ======================================
+          USER + ADMIN
+          ====================================== */}
 
       <Tabs.Screen
         name="index"
@@ -102,42 +59,35 @@ export default function TabLayout() {
           title: 'Home',
 
           tabBarIcon: ({
-            focused,
+            color,
+            size,
           }) => (
-            <BottomIcon
-              icon="home-outline"
-              focused={focused}
+            <MaterialCommunityIcons
+              name="home-outline"
+              color={color}
+              size={size}
             />
           ),
         }}
       />
-
-
-      {/* ================================================== */}
-      {/* PRODUCTS */}
-      {/* User + Admin เห็น */}
-      {/* ================================================== */}
 
       <Tabs.Screen
         name="product"
         options={{
-          title: 'Products',
+          title: 'Product',
 
           tabBarIcon: ({
-            focused,
+            color,
+            size,
           }) => (
-            <BottomIcon
-              icon="storefront-outline"
-              focused={focused}
+            <MaterialCommunityIcons
+              name="storefront-outline"
+              color={color}
+              size={size}
             />
           ),
         }}
       />
-
-
-      {/* ================================================== */}
-      {/* CART */}
-      {/* ================================================== */}
 
       <Tabs.Screen
         name="cart"
@@ -145,41 +95,35 @@ export default function TabLayout() {
           title: 'Cart',
 
           tabBarIcon: ({
-            focused,
+            color,
+            size,
           }) => (
-            <BottomIcon
-              icon="cart-outline"
-              focused={focused}
+            <MaterialCommunityIcons
+              name="cart-outline"
+              color={color}
+              size={size}
             />
           ),
         }}
       />
-
-
-      {/* ================================================== */}
-      {/* ORDERS */}
-      {/* ================================================== */}
 
       <Tabs.Screen
         name="orders"
         options={{
-          title: 'Orders',
+          title: 'Order',
 
           tabBarIcon: ({
-            focused,
+            color,
+            size,
           }) => (
-            <BottomIcon
-              icon="package-variant-closed"
-              focused={focused}
+            <MaterialCommunityIcons
+              name="package-variant-closed"
+              color={color}
+              size={size}
             />
           ),
         }}
       />
-
-
-      {/* ================================================== */}
-      {/* SHIPPING */}
-      {/* ================================================== */}
 
       <Tabs.Screen
         name="shipping"
@@ -187,42 +131,17 @@ export default function TabLayout() {
           title: 'Shipping',
 
           tabBarIcon: ({
-            focused,
+            color,
+            size,
           }) => (
-            <BottomIcon
-              icon="truck-outline"
-              focused={focused}
+            <MaterialCommunityIcons
+              name="truck-outline"
+              color={color}
+              size={size}
             />
           ),
         }}
       />
-
-
-      {/* ================================================== */}
-      {/* PROFILE */}
-      {/* ================================================== */}
-
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profile',
-
-          tabBarIcon: ({
-            focused,
-          }) => (
-            <BottomIcon
-              icon="account-outline"
-              focused={focused}
-            />
-          ),
-        }}
-      />
-
-
-      {/* ================================================== */}
-      {/* CLAIM */}
-      {/* User + Admin เห็น */}
-      {/* ================================================== */}
 
       <Tabs.Screen
         name="claim"
@@ -230,65 +149,131 @@ export default function TabLayout() {
           title: 'Claim',
 
           tabBarIcon: ({
-            focused,
+            color,
+            size,
           }) => (
-            <BottomIcon
-              icon="shield-check-outline"
-              focused={focused}
+            <MaterialCommunityIcons
+              name="shield-check-outline"
+              color={color}
+              size={size}
             />
           ),
         }}
       />
 
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Profile',
 
-      {/* ================================================== */}
-      {/* CLAIM ADMIN */}
-      {/* Admin เท่านั้น */}
-      {/* ================================================== */}
+          tabBarIcon: ({
+            color,
+            size,
+          }) => (
+            <MaterialCommunityIcons
+              name="account-outline"
+              color={color}
+              size={size}
+            />
+          ),
+        }}
+      />
+
+      {/* ======================================
+          ADMIN ONLY
+          ====================================== */}
 
       <Tabs.Screen
         name="claim-admin"
         options={{
           title: 'Claim Admin',
 
-          tabBarButton:
-            isAdmin
-              ? undefined
-              : () => null,
+          href: isAdmin
+            ? '/claim-admin'
+            : null,
 
           tabBarIcon: ({
-            focused,
+            color,
+            size,
           }) => (
-            <BottomIcon
-              icon="crown-outline"
-              focused={focused}
+            <MaterialCommunityIcons
+              name="crown-outline"
+              color={color}
+              size={size}
             />
           ),
         }}
       />
-
-
-      {/* ================================================== */}
-      {/* DASHBOARD */}
-      {/* Admin เท่านั้น */}
-      {/* ================================================== */}
 
       <Tabs.Screen
         name="dashboard"
         options={{
           title: 'Dashboard',
 
-          tabBarButton:
-            isAdmin
-              ? undefined
-              : () => null,
+          href: isAdmin
+            ? '/dashboard'
+            : null,
 
           tabBarIcon: ({
-            focused,
+            color,
+            size,
           }) => (
-            <BottomIcon
-              icon="chart-box-outline"
-              focused={focused}
+            <MaterialCommunityIcons
+              name="chart-box-outline"
+              color={color}
+              size={size}
+            />
+          ),
+        }}
+      />
+
+      {/* ======================================
+          PURCHASE ORDER ⭐
+          ====================================== */}
+
+      <Tabs.Screen
+        name="purchase-order"
+        options={{
+          title: 'Purchase Order',
+
+          href: isAdmin
+            ? '/purchase-order'
+            : null,
+
+          tabBarIcon: ({
+            color,
+            size,
+          }) => (
+            <MaterialCommunityIcons
+              name="clipboard-list-outline"
+              color={color}
+              size={size}
+            />
+          ),
+        }}
+      />
+
+      {/* ======================================
+          ADMIN SHIPPING
+          ====================================== */}
+
+      <Tabs.Screen
+        name="admin-shipping"
+        options={{
+          title: 'Admin Shipping',
+
+          href: isAdmin
+            ? '/admin-shipping'
+            : null,
+
+          tabBarIcon: ({
+            color,
+            size,
+          }) => (
+            <MaterialCommunityIcons
+              name="truck-check-outline"
+              color={color}
+              size={size}
             />
           ),
         }}
@@ -297,137 +282,3 @@ export default function TabLayout() {
     </Tabs>
   );
 }
-
-
-// ============================================================
-// BOTTOM ICON
-// ============================================================
-
-function BottomIcon({
-  icon,
-  focused,
-}: {
-  icon:
-    keyof typeof MaterialCommunityIcons.glyphMap;
-
-  focused: boolean;
-}) {
-  return (
-    <View
-      style={[
-        styles.iconWrapper,
-
-        focused &&
-          styles.iconWrapperActive,
-      ]}
-    >
-
-      {/* ================================================ */}
-      {/* ACTIVE GLOW */}
-      {/* ================================================ */}
-
-      {focused && (
-        <View
-          style={
-            styles.activeGlow
-          }
-        />
-      )}
-
-
-      {/* ================================================ */}
-      {/* ICON */}
-      {/* ================================================ */}
-
-      <MaterialCommunityIcons
-        name={icon}
-        size={19}
-        color={
-          focused
-            ? '#FFFFFF'
-            : '#777B85'
-        }
-      />
-
-    </View>
-  );
-}
-
-
-// ============================================================
-// STYLES
-// ============================================================
-
-const styles = StyleSheet.create({
-
-  // ----------------------------------------------------------
-  // ICON WRAPPER
-  // ----------------------------------------------------------
-
-  iconWrapper: {
-    width: 38,
-    height: 34,
-
-    borderRadius: 18,
-
-    alignItems: 'center',
-    justifyContent: 'center',
-
-    position: 'relative',
-
-    backgroundColor:
-      'rgba(255,255,255,0.02)',
-
-    borderWidth: 1,
-
-    borderColor:
-      'rgba(255,255,255,0.04)',
-  },
-
-
-  // ----------------------------------------------------------
-  // ACTIVE ICON
-  // ----------------------------------------------------------
-
-  iconWrapperActive: {
-    backgroundColor:
-      'rgba(82,75,220,0.18)',
-
-    borderColor:
-      'rgba(110,100,255,0.55)',
-
-    shadowColor:
-      '#6258FF',
-
-    shadowOpacity: 0.55,
-
-    shadowRadius: 10,
-
-    elevation: 6,
-  },
-
-
-  // ----------------------------------------------------------
-  // ACTIVE GLOW
-  // ----------------------------------------------------------
-
-  activeGlow: {
-    position: 'absolute',
-
-    width: 34,
-    height: 34,
-
-    borderRadius: 17,
-
-    backgroundColor:
-      'rgba(92,80,255,0.12)',
-
-    shadowColor:
-      '#6C5CFF',
-
-    shadowOpacity: 0.85,
-
-    shadowRadius: 14,
-  },
-
-});

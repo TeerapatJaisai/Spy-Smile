@@ -29,7 +29,6 @@ export default function HomeScreen() {
   const radius = orbitSize / 2;
 
   const centerX = width / 2;
-
   const centerY = isSmall
     ? height * 0.47
     : height * 0.50;
@@ -97,61 +96,17 @@ export default function HomeScreen() {
   // ============================================================
 
   const menuItems = [
-    {
-      title: 'Products',
-      icon: 'storefront-outline',
-      route: '/product',
-      show: true,
-    },
-
-    {
-      title: 'Cart',
-      icon: 'cart-outline',
-      route: '/cart',
-      show: true,
-    },
-
-    {
-      title: 'Orders',
-      icon: 'package-variant-closed',
-      route: '/orders',
-      show: true,
-    },
-
-    {
-      title: 'Shipping',
-      icon: 'truck-outline',
-      route: '/shipping',
-      show: true,
-    },
-
-    {
-      title: 'Profile',
-      icon: 'account-outline',
-      route: '/profile',
-      show: true,
-    },
-
-    {
-      title: 'Claim',
-      icon: 'shield-check-outline',
-      route: '/claim',
-      show: true,
-    },
-
-    {
-      title: 'Claim Admin',
-      icon: 'crown-outline',
-      route: '/claim-admin',
-      show: isAdmin,
-    },
-
-    {
-      title: 'Dashboard',
-      icon: 'chart-box-outline',
-      route: '/dashboard',
-      show: isAdmin,
-    },
+    { title: 'Home', icon: 'home-outline', route: '/', show: true },
+    { title: 'Product', icon: 'storefront-outline', route: '/product', show: true },
+    { title: 'Cart', icon: 'cart-outline', route: '/cart', show: true },
+    { title: 'Order', icon: 'package-variant-closed', route: '/orders', show: true },
+    { title: 'Shipping', icon: 'truck-outline', route: '/shipping', show: true },
+    { title: 'Claim', icon: 'shield-check-outline', route: '/claim', show: true },
+    { title: 'Profile', icon: 'account-outline', route: '/profile', show: true },
+    { title: 'Claim Admin', icon: 'crown-outline', route: '/claim-admin', show: isAdmin },
+    { title: 'Dashboard', icon: 'chart-box-outline', route: '/dashboard', show: isAdmin },
+    { title: 'Purchase Order', icon: 'clipboard-list-outline', route: '/purchase-order', show: isAdmin },
+    { title: 'Admin Shipping', icon: 'truck-check-outline', route: '/admin-shipping', show: isAdmin },
   ];
 
   const visibleItems =
@@ -169,7 +124,7 @@ export default function HomeScreen() {
       <View
         pointerEvents="none"
         style={
-          StyleSheet.absoluteFillObject
+          StyleSheet.absoluteFill
         }
       >
 
@@ -184,13 +139,11 @@ export default function HomeScreen() {
         />
 
         {/* ==================================================
-            STARS
+            SMALL STARS
             ================================================== */}
 
         <View
-          style={
-            styles.starsLayer
-          }
+          style={styles.starsLayer}
         >
 
           <View
@@ -316,7 +269,7 @@ export default function HomeScreen() {
         </View>
 
         {/* ==================================================
-            METEORS
+            THIN METEORS
             ================================================== */}
 
         <Meteor
@@ -356,31 +309,23 @@ export default function HomeScreen() {
           ====================================================== */}
 
       <View
-        style={
-          styles.topArea
-        }
+        style={styles.topArea}
       >
 
         <Text
-          style={
-            styles.smallTitle
-          }
+          style={styles.smallTitle}
         >
           IT STORE
         </Text>
 
         <Text
-          style={
-            styles.mainTitle
-          }
+          style={styles.mainTitle}
         >
           Smart Inventory
         </Text>
 
         <Text
-          style={
-            styles.subTitle
-          }
+          style={styles.subTitle}
         >
           Manage your IT products
         </Text>
@@ -397,10 +342,8 @@ export default function HomeScreen() {
           {
             width: orbitSize,
             height: orbitSize,
-
             left:
               centerX - radius,
-
             top:
               centerY - radius,
           },
@@ -445,6 +388,10 @@ export default function HomeScreen() {
           {visibleItems.map(
             (item, index) => {
 
+              // ==================================================
+              // ORBIT POSITION
+              // ==================================================
+
               const angle =
                 (index /
                   visibleItems.length) *
@@ -485,7 +432,7 @@ export default function HomeScreen() {
                 >
 
                   {/* ==================================================
-                      KEEP ICON STRAIGHT
+                      COUNTER ROTATE
                       ================================================== */}
 
                   <Animated.View
@@ -502,6 +449,10 @@ export default function HomeScreen() {
                     ]}
                   >
 
+                    {/* ==================================================
+                        ICON
+                        ================================================== */}
+
                     <View
                       style={
                         styles.iconCircle
@@ -517,6 +468,10 @@ export default function HomeScreen() {
                       />
 
                     </View>
+
+                    {/* ==================================================
+                        LABEL
+                        ================================================== */}
 
                     <Text
                       style={
@@ -570,7 +525,7 @@ export default function HomeScreen() {
       </View>
 
       {/* ======================================================
-          BOTTOM TEXT
+          BOTTOM
           ====================================================== */}
 
       <View
@@ -597,80 +552,13 @@ export default function HomeScreen() {
 
       </View>
 
-      {/* ======================================================
-          CHAT BOT BUTTON
-          ====================================================== */}
-
-      <Pressable
-        onPress={() =>
-          router.push('/ai-chat' as any)
-        }
-        style={({ pressed }) => [
-          styles.chatBotButton,
-          pressed &&
-            styles.chatBotButtonPressed,
-        ]}
-      >
-
-        {/* EMOJI */}
-
-        <View
-          style={
-            styles.chatBotIcon
-          }
-        >
-          <Text
-            style={
-              styles.chatBotEmoji
-            }
-          >
-            🤖
-          </Text>
-        </View>
-
-        {/* TEXT */}
-
-        <View
-          style={
-            styles.chatBotTextArea
-          }
-        >
-
-          <Text
-            style={
-              styles.chatBotTitle
-            }
-          >
-            CHAT BOT
-          </Text>
-
-          <Text
-            style={
-              styles.chatBotSubTitle
-            }
-          >
-            Ask AI
-          </Text>
-
-        </View>
-
-        {/* ARROW */}
-
-        <MaterialCommunityIcons
-          name="chevron-right"
-          size={16}
-          color="#A89CFF"
-        />
-
-      </Pressable>
-
     </View>
   );
 }
 
 
 // ============================================================
-// METEOR
+// THIN METEOR
 // ============================================================
 
 function Meteor({
@@ -745,7 +633,7 @@ function Meteor({
   ]);
 
   // ==========================================================
-  // METEOR POSITIONS
+  // METEOR START POSITIONS
   // ==========================================================
 
   const positions = [
@@ -883,11 +771,19 @@ function Meteor({
       ]}
     >
 
+      {/* ==================================================
+          LONG TRAIL
+          ================================================== */}
+
       <View
         style={
           styles.meteorLineLong
         }
       />
+
+      {/* ==================================================
+          MID TRAIL
+          ================================================== */}
 
       <View
         style={
@@ -895,11 +791,19 @@ function Meteor({
         }
       />
 
+      {/* ==================================================
+          BRIGHT TRAIL
+          ================================================== */}
+
       <View
         style={
           styles.meteorLineBright
         }
       />
+
+      {/* ==================================================
+          LIGHT POINT
+          ================================================== */}
 
       <View
         style={
@@ -988,7 +892,7 @@ const styles = StyleSheet.create({
   },
 
   // ==========================================================
-  // METEOR
+  // THIN METEOR
   // ==========================================================
 
   thinMeteor: {
@@ -1372,107 +1276,6 @@ const styles = StyleSheet.create({
     color: '#666A73',
 
     fontSize: 11,
-  },
-
-  // ==========================================================
-  // CHAT BOT
-  // ==========================================================
-
-  chatBotButton: {
-    position: 'absolute',
-
-    right: 10,
-
-    bottom: 70,
-
-    width: 125,
-    height: 48,
-
-    paddingHorizontal: 8,
-
-    flexDirection: 'row',
-
-    alignItems: 'center',
-
-    backgroundColor:
-      'rgba(15,13,30,0.96)',
-
-    borderWidth: 1,
-
-    borderColor:
-      'rgba(110,95,255,0.75)',
-
-    borderRadius: 14,
-
-    shadowColor:
-      '#675BFF',
-
-    shadowOpacity: 0.5,
-
-    shadowRadius: 12,
-
-    elevation: 10,
-
-    zIndex: 100,
-  },
-
-  chatBotButtonPressed: {
-    transform: [
-      {
-        scale: 0.96,
-      },
-    ],
-
-    backgroundColor:
-      'rgba(30,25,60,0.98)',
-  },
-
-  chatBotIcon: {
-    width: 32,
-    height: 32,
-
-    borderRadius: 16,
-
-    alignItems: 'center',
-    justifyContent: 'center',
-
-    backgroundColor:
-      'rgba(100,85,255,0.18)',
-
-    borderWidth: 1,
-
-    borderColor:
-      'rgba(140,125,255,0.55)',
-
-    marginRight: 6,
-  },
-
-  chatBotEmoji: {
-    fontSize: 18,
-  },
-
-  chatBotTextArea: {
-    flex: 1,
-
-    justifyContent: 'center',
-  },
-
-  chatBotTitle: {
-    color: '#FFFFFF',
-
-    fontSize: 10,
-
-    fontWeight: '800',
-
-    letterSpacing: 0.8,
-  },
-
-  chatBotSubTitle: {
-    color: '#777B85',
-
-    fontSize: 8,
-
-    marginTop: 1,
   },
 
 });
