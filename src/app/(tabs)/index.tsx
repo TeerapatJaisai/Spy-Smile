@@ -552,6 +552,27 @@ export default function HomeScreen() {
 
       </View>
 
+      {/* ======================================================
+          AI CHATBOT
+          ====================================================== */}
+
+      <Pressable
+        style={styles.chatbotButton}
+        onPress={() => router.push('/ai-chat' as any)}
+      >
+        <View style={styles.chatbotGlow} />
+
+        <View style={styles.chatbotInner}>
+          <MaterialCommunityIcons
+            name="robot-outline"
+            size={28}
+            color="#FFFFFF"
+          />
+        </View>
+
+        <Text style={styles.chatbotLabel}>AI</Text>
+      </Pressable>
+
     </View>
   );
 }
@@ -1276,6 +1297,73 @@ const styles = StyleSheet.create({
     color: '#666A73',
 
     fontSize: 11,
+  },
+
+
+  // ==========================================================
+  // AI CHATBOT
+  // ==========================================================
+
+  chatbotButton: {
+    position: 'absolute',
+    right: 22,
+    bottom: Platform.OS === 'web' ? 92 : 105,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(10,10,18,0.96)',
+    borderWidth: 1,
+    borderColor: 'rgba(130,120,255,0.72)',
+    shadowColor: '#6A5CFF',
+    shadowOpacity: 0.85,
+    shadowRadius: 18,
+    shadowOffset: {
+      width: 0,
+      height: 5,
+    },
+    elevation: 10,
+    zIndex: 30,
+  },
+
+  chatbotGlow: {
+    position: 'absolute',
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: 'rgba(92,78,255,0.18)',
+    shadowColor: '#6A5CFF',
+    shadowOpacity: 0.9,
+    shadowRadius: 20,
+  },
+
+  chatbotInner: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#17152F',
+    borderWidth: 1,
+    borderColor: 'rgba(140,130,255,0.65)',
+  },
+
+  chatbotLabel: {
+    position: 'absolute',
+    right: -2,
+    top: -5,
+    minWidth: 21,
+    height: 21,
+    paddingHorizontal: 4,
+    borderRadius: 11,
+    overflow: 'hidden',
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    backgroundColor: '#635BFF',
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '900',
   },
 
 });
